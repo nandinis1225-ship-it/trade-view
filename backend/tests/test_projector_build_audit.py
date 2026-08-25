@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from tests.audit_patterns import (
     PROJECTOR_ALLOWED_ROUTES,
     PROJECTOR_FORBIDDEN_DIRS,
@@ -47,6 +49,8 @@ def test_projector_out_prunes_participant_routes():
     out = root / "frontend" / "out"
     if not out.is_dir():
         return
+    if not (out / "projector").is_dir():
+        pytest.skip("projector build not present — run npm run build:projector first")
     for forbidden in PROJECTOR_FORBIDDEN_DIRS:
         assert not (out / forbidden).exists(), f"projector build must not include out/{forbidden}"
 
@@ -56,6 +60,8 @@ def test_projector_out_forbidden_content_audit():
     out = root / "frontend" / "out"
     if not out.is_dir():
         return
+    if not (out / "projector").is_dir():
+        pytest.skip("projector build not present — run npm run build:projector first")
     failures = _scan_projector_out(out)
     assert not failures, "\n".join(failures[:25])
 

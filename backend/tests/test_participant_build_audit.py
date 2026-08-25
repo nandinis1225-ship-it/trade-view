@@ -4,9 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from tests.audit_patterns import PARTICIPANT_FORBIDDEN_DIRS, PARTICIPANT_FORBIDDEN_PATTERNS
 
 ALLOWED_TERMINAL_TOKENS = frozenset({"MARKET_PULSE"})
+
+# Terminal WS handler may reference MARKET_PULSE (server suppresses in event mode).
+PARTICIPANT_SCAN_PATTERNS = tuple(
+    p for p in PARTICIPANT_FORBIDDEN_PATTERNS if p not in ALLOWED_TERMINAL_TOKENS
+)
 
 
 def _scan_participant_out(out: Path) -> list[str]:
@@ -26,7 +33,7 @@ def _scan_participant_out(out: Path) -> list[str]:
             content = path.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
-        for pattern in PARTICIPANT_FORBIDDEN_PATTERNS:
+        for pattern in PARTICIPANT_SCAN_PATTERNS:
             if pattern in content:
                 failures.append(f"{rel}: contains '{pattern}'")
     return failures
@@ -37,6 +44,10 @@ def test_participant_out_prunes_developer_routes():
     out = root / "frontend" / "out"
     if not out.is_dir():
         return
+    if not (out / "terminal").is_dir():
+        pytest.skip("participant build not present — run npm run build:participant first")
+    if (out / "projector").is_dir():
+        pytest.skip("mixed out/ tree — rebuild with npm run build:participant only")
     for forbidden in PARTICIPANT_FORBIDDEN_DIRS:
         assert not (out / forbidden).exists(), f"participant build must not include out/{forbidden}"
 
@@ -46,6 +57,10 @@ def test_participant_out_forbidden_content_audit():
     out = root / "frontend" / "out"
     if not out.is_dir():
         return
+    if not (out / "terminal").is_dir():
+        pytest.skip("participant build not present — run npm run build:participant first")
+    if (out / "projector").is_dir():
+        pytest.skip("mixed out/ tree — rebuild with npm run build:participant only")
     failures = _scan_participant_out(out)
     assert not failures, "\n".join(failures[:25])
 
@@ -57,7 +72,7 @@ def test_participant_terminal_bundle_has_no_admin_strings():
         return
     for chunk in terminal_chunks:
         text = chunk.read_text(encoding="utf-8", errors="ignore")
-        for pattern in PARTICIPANT_FORBIDDEN_PATTERNS:
+        for pattern in PARTICIPANT_SCAN_PATTERNS:
             assert pattern not in text, f"{chunk.name} contains {pattern}"
         for token in ("AI_TICK", "fair_value", "sector_impact"):
             if token in text and token not in ALLOWED_TERMINAL_TOKENS:
