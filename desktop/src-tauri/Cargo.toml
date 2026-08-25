@@ -10,6 +10,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
+ureq = { version = "2.9", default-features = false, features = ["json"] }
 
 [lib]
 name = "tradeverse_desktop_lib"

@@ -1,7 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller spec for TRADEVERSE participant backend sidecar."""
 
-import sys
 from pathlib import Path
 
 block_cipher = None
@@ -10,7 +9,7 @@ backend = root
 seed = backend / "app" / "seed"
 
 datas = []
-for name in ("tradeverse_timeline.baked.json", "tradeverse_universe.json"):
+for name in ("tradeverse_timeline.pkg", "tradeverse_universe.json"):
     path = seed / name
     if path.is_file():
         datas.append((str(path), str(Path("app/seed"))))
@@ -31,12 +30,11 @@ a = Analysis(
         "uvicorn.protocols.websockets.auto",
         "uvicorn.lifespan",
         "uvicorn.lifespan.on",
-        "psycopg",
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=["psycopg"],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -58,7 +56,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True,
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

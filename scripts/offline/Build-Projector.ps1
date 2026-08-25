@@ -1,7 +1,5 @@
 # Builds TRADEVERSE public projector package (Windows)
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$TimelineKey,
     [switch]$SkipTauri
 )
 
@@ -10,7 +8,17 @@ $Root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $ProjectorDir = Join-Path $Root "projector-build"
 $FrontendDir = Join-Path $Root "frontend"
 $BackendDir = Join-Path $Root "backend"
-$BakedTimeline = Join-Path $BackendDir "app\seed\tradeverse_timeline.baked.json"
+$TimelineJson = Join-Path $BackendDir "app\seed\tradeverse_timeline.json"
+
+if (-not (Test-Path $TimelineJson)) {
+    throw "Production timeline missing: $TimelineJson"
+}
+
+Write-Host "Protecting production timeline..."
+Push-Location $BackendDir
+python scripts/protect_timeline.py --events 64
+if ($LASTEXITCODE -ne 0) { throw "protect_timeline.py failed" }
+Pop-Location
 
 Write-Host "Building projector frontend..."
 Push-Location $FrontendDir
@@ -23,10 +31,8 @@ Write-Host "Baking timeline for projector..."
 $envOut = Join-Path $Root "dist-package\.env.projector"
 New-Item -ItemType Directory -Path (Split-Path $envOut) -Force | Out-Null
 python (Join-Path $BackendDir "scripts\build_event_env.py") `
-    --timeline-key $TimelineKey `
     --event-pin "0000" `
     --output $envOut `
-    --bake-timeline $BakedTimeline `
     --projector
 if ($LASTEXITCODE -ne 0) { throw "build_event_env.py failed" }
 

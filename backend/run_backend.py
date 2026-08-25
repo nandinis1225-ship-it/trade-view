@@ -18,14 +18,24 @@ def _configure_paths() -> None:
 
 def main() -> None:
     _configure_paths()
-    import uvicorn
-
+    from app.paths import configure_packaged_runtime
     from app.core.config import get_settings
+
+    configure_packaged_runtime()
+    get_settings.cache_clear()
+
+    import uvicorn
 
     settings = get_settings()
     host = os.environ.get("BACKEND_HOST", settings.backend_host)
     port = int(os.environ.get("BACKEND_PORT", settings.backend_port))
-    uvicorn.run("app.main:app", host=host, port=port, log_level="info")
+    uvicorn.run(
+        "app.main:app",
+        host=host,
+        port=port,
+        log_level="info",
+        access_log=False,
+    )
 
 
 if __name__ == "__main__":

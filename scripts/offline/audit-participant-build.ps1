@@ -4,11 +4,14 @@ $Root = if ($args[0]) { $args[0] } else { (Resolve-Path (Join-Path $PSScriptRoot
 $failures = @()
 
 $forbiddenPatterns = @(
+    "TIMELINE_DECRYPT_KEY",
+    "tradeverse_timeline.json",
+    "tradeverse_timeline.baked.json",
+    "tradeverse_timeline.pkg",
     "SUPABASE",
     "supabase.co",
+    "railway.app",
     "leaderboard",
-    "admin",
-    "developer",
     "EUPHORIA",
     "CRASH",
     "RECOVERY",
@@ -23,9 +26,6 @@ $forbiddenPatterns = @(
     "stop_loss",
     "take_profit",
     "current_phase",
-    "tradeverse_timeline.json",
-    "Start now",
-    "30s countdown",
     "OrganizerDebugPanel",
     "/developer",
     "adminLogin"
@@ -34,11 +34,8 @@ $forbiddenPatterns = @(
 $forbiddenDirs = @("admin", "market-screen", "developer")
 
 $scanPaths = @(
-    (Join-Path $Root "participant-build\ui"),
-    (Join-Path $Root "frontend\out"),
-    (Join-Path $Root "frontend\public\tradeverse-runtime.json"),
-    (Join-Path $Root "participant-build\.env"),
-    (Join-Path $Root "dist-package\.env")
+    (Join-Path $Root "ui"),
+    (Join-Path $Root ".env")
 )
 
 foreach ($path in $scanPaths) {

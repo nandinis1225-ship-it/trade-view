@@ -9,7 +9,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.services.pin_service import generate_pin_verifier
-from app.services.timeline_crypto import bake_timeline_for_participant
 
 EVENT_ENV_LINES = """# TRADEVERSE participant event package — auto-generated, do not edit
 LOCAL_INSTANCE_MODE=true
@@ -18,7 +17,6 @@ DEVELOPER_MODE=false
 ENVIRONMENT=production
 DEBUG=false
 AUTO_INIT_DB=true
-TIMELINE_EMBEDDED=true
 
 BACKEND_HOST=127.0.0.1
 BACKEND_PORT=8765
@@ -52,7 +50,6 @@ PROJECTOR_MODE=true
 ENVIRONMENT=production
 DEBUG=false
 AUTO_INIT_DB=true
-TIMELINE_EMBEDDED=true
 
 BACKEND_HOST=127.0.0.1
 BACKEND_PORT=8765
@@ -76,22 +73,10 @@ NEXT_PUBLIC_API_PREFIX=/api/v1
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate participant event .env")
-    parser.add_argument("--timeline-key", required=True)
     parser.add_argument("--event-pin", default="0000")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--projector", action="store_true", help="Write projector .env (no PIN)")
-    parser.add_argument(
-        "--bake-timeline",
-        type=Path,
-        default=None,
-        help="Optional path to write baked timeline JSON for participant runtime",
-    )
     args = parser.parse_args()
-
-    bake_dest = args.bake_timeline
-    if bake_dest is None:
-        bake_dest = Path(__file__).resolve().parents[1] / "app" / "seed" / "tradeverse_timeline.baked.json"
-    bake_timeline_for_participant(args.timeline_key.strip(), dest=bake_dest)
 
     if args.projector:
         content = PROJECTOR_ENV_LINES
@@ -101,7 +86,6 @@ def main() -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(content, encoding="utf-8")
     print(f"Wrote event .env to {args.output}")
-    print(f"Baked timeline to {bake_dest}")
     return 0
 
 

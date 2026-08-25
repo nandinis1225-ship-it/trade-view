@@ -61,15 +61,17 @@ def mini_timeline(monkeypatch):
 
 @pytest.fixture()
 def production_timeline(monkeypatch):
-    """Load the real encrypted production timeline (requires TIMELINE_DECRYPT_KEY)."""
-    from app.services.timeline_crypto import TIMELINE_ENC, decrypt_timeline_bytes
+    """Load the real production timeline from JSON (dev) or protected package (build)."""
+    import json
 
-    key = os.environ.get("TIMELINE_DECRYPT_KEY")
-    if not key:
-        pytest.skip("TIMELINE_DECRYPT_KEY required for production timeline tests")
-    if not TIMELINE_ENC.is_file():
-        pytest.skip("tradeverse_timeline.enc not found")
-    data = decrypt_timeline_bytes(key, TIMELINE_ENC.read_bytes())
+    from app.services.timeline_protection import TIMELINE_JSON, TIMELINE_PKG, load_protected_timeline
+
+    if TIMELINE_JSON.is_file():
+        data = json.loads(TIMELINE_JSON.read_text(encoding="utf-8"))
+    elif TIMELINE_PKG.is_file():
+        data = load_protected_timeline()
+    else:
+        pytest.skip("production timeline JSON or tradeverse_timeline.pkg required")
     _patch_timeline(monkeypatch, data)
     return data
 

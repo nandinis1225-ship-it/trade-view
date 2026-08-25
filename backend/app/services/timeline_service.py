@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models.enums import TimelineEventStatus, TimelineEventType
 from app.models.timeline_event import TimelineEvent
-from app.services.timeline_crypto import load_timeline_data
+from app.services.timeline_protection import load_timeline_data
 
 TIMELINE_PATH = Path(__file__).resolve().parents[1] / "seed" / "tradeverse_timeline.json"
 TIMELINE_ENC_PATH = Path(__file__).resolve().parents[1] / "seed" / "tradeverse_timeline.enc"
@@ -62,8 +62,7 @@ def phase_for_elapsed(elapsed_sec: float) -> str:
 
 
 def load_timeline_json() -> dict[str, Any]:
-    settings = get_settings()
-    return load_timeline_data(settings.timeline_decrypt_key)
+    return load_timeline_data()
 
 
 def validate_timeline(data: dict[str, Any] | None = None) -> list[str]:

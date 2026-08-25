@@ -6,6 +6,8 @@ behaviour without touching exchange mechanics.
 
 from functools import lru_cache
 
+from pathlib import Path
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -126,11 +128,17 @@ class Settings(BaseSettings):
     @property
     def default_local_db_path(self) -> str:
         import os
+        import platform
 
-        base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
-        data_dir = os.path.join(base, "Tradeverse", "data")
-        os.makedirs(data_dir, exist_ok=True)
-        return os.path.join(data_dir, "trader.db")
+        if platform.system() == "Darwin":
+            data_dir = (
+                Path.home() / "Library" / "Application Support" / "Tradeverse" / "data"
+            )
+        else:
+            base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+            data_dir = Path(base) / "Tradeverse" / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        return str(data_dir / "trader.db")
 
     @property
     def database_url(self) -> str:

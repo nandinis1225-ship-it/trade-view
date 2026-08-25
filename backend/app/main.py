@@ -119,13 +119,13 @@ def create_app() -> FastAPI:
     app.include_router(ws.router, prefix=prefix)
 
     if settings.serve_static_ui:
-        from pathlib import Path
-
         from fastapi.responses import RedirectResponse
         from fastapi.staticfiles import StaticFiles
 
-        static_dir = Path(__file__).resolve().parents[2] / "frontend" / "out"
-        if static_dir.is_dir():
+        from app.paths import resolve_static_ui_dir
+
+        static_dir = resolve_static_ui_dir()
+        if static_dir is not None:
             @app.get("/")
             def root_redirect():
                 return RedirectResponse(url="/terminal", status_code=302)

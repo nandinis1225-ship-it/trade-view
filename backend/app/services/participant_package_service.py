@@ -24,10 +24,7 @@ def build_participant_zip() -> dict:
     from app.core.config import get_settings
 
     settings = get_settings()
-    timeline_key = (settings.timeline_decrypt_key or "").strip()
     event_pin = (settings.event_pin or "").strip()
-    if not timeline_key:
-        raise ParticipantPackageError("TIMELINE_DECRYPT_KEY is not configured")
     if not event_pin:
         raise ParticipantPackageError("EVENT_PIN is not configured")
 
@@ -40,8 +37,6 @@ def build_participant_zip() -> dict:
                 "Bypass",
                 "-File",
                 str(_BUILD_SCRIPT),
-                "-TimelineKey",
-                timeline_key,
                 "-EventPin",
                 event_pin,
             ],

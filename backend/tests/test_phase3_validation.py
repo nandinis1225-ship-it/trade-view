@@ -238,7 +238,7 @@ def test_production_timeline_structure(production_timeline):
     errors = validate_timeline(production_timeline)
     assert errors == [], errors
     events = production_timeline["events"]
-    assert len(events) >= 50
+    assert len(events) >= 64
     ids = [int(e["checkpoint_id"]) for e in events]
     assert len(ids) == len(set(ids)), "duplicate checkpoint_id in production timeline"
     keys = [e.get("idempotency_key") or f"cp_{e['checkpoint_id']}" for e in events]
