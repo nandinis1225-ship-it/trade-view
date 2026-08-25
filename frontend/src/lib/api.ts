@@ -78,26 +78,6 @@ async function fetchWithTimeout(
       signal: controller.signal,
     });
   } catch (e) {
-    // #region agent log
-    fetch("http://127.0.0.1:7751/ingest/a915aa99-33fd-43fa-bac6-36d58d56dd08", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ac2555" },
-      body: JSON.stringify({
-        sessionId: "ac2555",
-        location: "api.ts:fetchWithTimeout",
-        message: "fetch failed",
-        data: {
-          url: input,
-          method: init?.method ?? "GET",
-          name: e instanceof Error ? e.name : "unknown",
-          err: e instanceof Error ? e.message : String(e),
-          apiBase: getApiBaseUrl(),
-        },
-        timestamp: Date.now(),
-        hypothesisId: "A_RELOAD_DOWN",
-      }),
-    }).catch(() => {});
-    // #endregion
     if (e instanceof Error && e.name === "AbortError") {
       throw new Error(`Request timed out after ${timeoutMs / 1000}s`);
     }
@@ -182,6 +162,18 @@ export function isLocalInstance(): boolean {
   return process.env.NEXT_PUBLIC_LOCAL_INSTANCE === "true";
 }
 
+export function isParticipantEventMode(): boolean {
+  const rt = getRuntimeConfig()?.participantEventMode;
+  if (rt === true) return true;
+  return process.env.NEXT_PUBLIC_PARTICIPANT_EVENT_MODE === "true";
+}
+
+export function isPinRequired(): boolean {
+  const rt = getRuntimeConfig()?.pinRequired;
+  if (rt === true) return true;
+  return isParticipantEventMode();
+}
+
 export function getLeaderboardCollectorUrl(): string | null {
   const url = process.env.NEXT_PUBLIC_LEADERBOARD_URL?.replace(/\/$/, "");
   return url || null;
@@ -207,6 +199,7 @@ export function getSupabaseLeaderboardConfig(): {
 }
 
 export function hasRemoteLeaderboard(): boolean {
+  if (isParticipantEventMode()) return false;
   return getSupabaseLeaderboardConfig() !== null || getLeaderboardCollectorUrl() !== null;
 }
 
@@ -385,6 +378,7 @@ export async function probeMarketApi(path: string): Promise<{ ok: boolean; url: 
 
 /** Ask backend to push this trader's score to Supabase / LAN collector. */
 export async function pushLeaderboardSnapshot(): Promise<boolean> {
+  if (isParticipantEventMode()) return false;
   try {
     const res = await apiPost<{ ok?: boolean }>("/session/push-leaderboard");
     if (res.ok) return true;
@@ -476,58 +470,32 @@ export async function joinSession(displayName: string): Promise<{
   return res;
 }
 
-export async function startLocalSimulation(): Promise<Record<string, unknown>> {
-  // #region agent log
-  fetch("http://127.0.0.1:7751/ingest/a915aa99-33fd-43fa-bac6-36d58d56dd08", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ac2555" },
-    body: JSON.stringify({
-      sessionId: "ac2555",
-      location: "api.ts:startLocalSimulation",
-      message: "start begin",
-      data: { apiBase: getApiBaseUrl() },
-      timestamp: Date.now(),
-      hypothesisId: "B_START_PATH",
-    }),
-  }).catch(() => {});
-  // #endregion
+export async function validateEventPin(pin: string): Promise<void> {
+  await apiPost("/auth/validate-pin", { pin });
+}
+
+async function bootstrapSimulation(): Promise<void> {
   try {
     await apiPost("/simulation/bootstrap");
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";
-    // #region agent log
-    fetch("http://127.0.0.1:7751/ingest/a915aa99-33fd-43fa-bac6-36d58d56dd08", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ac2555" },
-      body: JSON.stringify({
-        sessionId: "ac2555",
-        location: "api.ts:startLocalSimulation:bootstrap",
-        message: "bootstrap error (may ignore)",
-        data: { msg },
-        timestamp: Date.now(),
-        hypothesisId: "B_START_PATH",
-      }),
-    }).catch(() => {});
-    // #endregion
     if (/timeline|TIMELINE_DECRYPT/i.test(msg)) throw e;
     /* universe may already exist */
   }
-  const started = await apiPost<Record<string, unknown>>("/simulation/start");
-  // #region agent log
-  fetch("http://127.0.0.1:7751/ingest/a915aa99-33fd-43fa-bac6-36d58d56dd08", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ac2555" },
-    body: JSON.stringify({
-      sessionId: "ac2555",
-      location: "api.ts:startLocalSimulation:done",
-      message: "start ok",
-      data: { status: started.status, action: started.action },
-      timestamp: Date.now(),
-      hypothesisId: "B_START_PATH",
-    }),
-  }).catch(() => {});
-  // #endregion
-  return started;
+}
+
+export async function startEventSimulation(eventPin: string): Promise<Record<string, unknown>> {
+  await bootstrapSimulation();
+  return apiPost<Record<string, unknown>>("/simulation/event-start", { event_pin: eventPin });
+}
+
+export async function startLocalSimulation(eventPin?: string): Promise<Record<string, unknown>> {
+  if (isParticipantEventMode()) {
+    if (!eventPin) throw new Error("Event PIN required");
+    return startEventSimulation(eventPin);
+  }
+  await bootstrapSimulation();
+  return apiPost<Record<string, unknown>>("/simulation/start");
 }
 
 export async function resetLocalSimulation(): Promise<Record<string, unknown>> {
@@ -553,26 +521,7 @@ export type BuildParticipantZipResult = {
 };
 
 export async function organizerResetMarket(passkey: string): Promise<OrganizerResetResult> {
-  const result = await apiPost<OrganizerResetResult>("/simulation/organizer/reset-all", { passkey });
-  // #region agent log
-  fetch("http://127.0.0.1:7751/ingest/a915aa99-33fd-43fa-bac6-36d58d56dd08", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ac2555" },
-    body: JSON.stringify({
-      sessionId: "ac2555",
-      location: "api.ts:organizerResetMarket",
-      message: "organizer reset result",
-      data: {
-        global_reset_signaled: result.global_reset_signaled,
-        leaderboard_cleared: result.leaderboard_cleared,
-        action: result.action,
-      },
-      timestamp: Date.now(),
-      hypothesisId: "RESET",
-    }),
-  }).catch(() => {});
-  // #endregion
-  return result;
+  return apiPost<OrganizerResetResult>("/simulation/organizer/reset-all", { passkey });
 }
 
 export async function organizerBuildParticipantZip(
@@ -615,28 +564,9 @@ export async function organizerStopMarket(passkey: string): Promise<OrganizerRes
 }
 
 export async function organizerFreshWipe(passkey: string): Promise<OrganizerResetResult> {
-  const result = await apiPost<OrganizerResetResult>("/simulation/organizer/fresh-wipe", {
+  return apiPost<OrganizerResetResult>("/simulation/organizer/fresh-wipe", {
     passkey,
   });
-  // #region agent log
-  fetch("http://127.0.0.1:7751/ingest/a915aa99-33fd-43fa-bac6-36d58d56dd08", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ac2555" },
-    body: JSON.stringify({
-      sessionId: "ac2555",
-      location: "api.ts:organizerFreshWipe",
-      message: "fresh wipe result",
-      data: {
-        action: result.action,
-        global_reset_signaled: result.global_reset_signaled,
-        leaderboard_cleared: result.leaderboard_cleared,
-      },
-      timestamp: Date.now(),
-      hypothesisId: "FRESH_WIPE",
-    }),
-  }).catch(() => {});
-  // #endregion
-  return result;
 }
 
 export async function fetchGlobalResetAt(): Promise<string | null> {
@@ -669,6 +599,8 @@ export async function exportSnapshot(): Promise<Record<string, unknown>> {
 
 export type SessionBootstrap = {
   trader_id: number;
+  trader_name?: string;
+  trade_count?: number;
   wallet: Wallet;
   portfolio: Portfolio;
   stocks: SidebarStock[];
@@ -686,6 +618,16 @@ export type SessionBootstrap = {
   open_ipos?: IPO[];
   ipo_applications?: Array<{ id: number; ipo_id: number; status: string }>;
 };
+
+export type HealthResponse = {
+  participant_event_mode?: boolean;
+  pin_required?: boolean;
+  local_instance_mode?: boolean;
+};
+
+export async function fetchHealthConfig(): Promise<HealthResponse> {
+  return apiGet<HealthResponse>("/health");
+}
 
 type Wallet = {
   available_cash: string;

@@ -176,6 +176,6 @@ def apply_universe_simulation_settings(db: Session) -> None:
     settings = get_or_create_settings(db)
     settings.sim_duration_sec = const["sim_duration_sec"]
     settings.simulation_seed = const["default_simulation_seed"]
-    settings.simulation_ai_enabled = False
+    settings.simulation_ai_enabled = get_settings().participant_event_mode
     db.commit()
 

@@ -7,11 +7,10 @@ type Props = {
   portfolio?: string | null;
   pnl?: string | null;
   ret?: string | null;
-  onLeaderboard: () => void;
-  showLeaderboard: boolean;
   onWallet: () => void;
   showWallet: boolean;
   tradingEnabled?: boolean;
+  elapsed?: string | null;
 };
 
 export function WalletBar({
@@ -19,11 +18,10 @@ export function WalletBar({
   portfolio,
   pnl,
   ret,
-  onLeaderboard,
-  showLeaderboard,
   onWallet,
   showWallet,
   tradingEnabled,
+  elapsed,
 }: Props) {
   return (
     <header
@@ -38,6 +36,9 @@ export function WalletBar({
           <span className="font-sans text-sm font-bold tracking-widest text-[var(--foreground)]">
             TRADEVERSE
           </span>
+          {elapsed && (
+            <span className="font-mono text-[10px] tabular-nums text-[var(--muted)]">{elapsed}</span>
+          )}
           {typeof tradingEnabled === "boolean" && (
             <span
               className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
@@ -81,17 +82,6 @@ export function WalletBar({
             }`}
           >
             {showWallet ? "Hide wallet" : "Wallet"}
-          </button>
-          <button
-            type="button"
-            onClick={onLeaderboard}
-            className={`rounded border px-2.5 py-1 font-sans text-[10px] uppercase tracking-wide transition-colors ${
-              showLeaderboard
-                ? "border-[var(--accent)]/50 bg-[var(--accent)]/10 text-[var(--accent)]"
-                : "border-[var(--line)] text-[var(--muted)] hover:bg-white/5 hover:text-[var(--foreground)]"
-            }`}
-          >
-            {showLeaderboard ? "Hide LB" : "Leaderboard"}
           </button>
         </div>
       </div>

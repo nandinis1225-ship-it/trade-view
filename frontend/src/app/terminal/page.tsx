@@ -1,22 +1,33 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BreakingNewsAlert } from "@/components/BreakingNewsAlert";
 import type { NewsItem } from "@/components/NewsPanel";
-import { Leaderboard, type LeaderboardRow } from "@/components/Leaderboard";
 import { StockSidebar, type SectorGroup, type SidebarStock } from "@/components/StockSidebar";
 import { TradePanel } from "@/components/TradePanel";
 import { WalletBar } from "@/components/WalletBar";
+import { EventCompleteScreen, type EventResult } from "@/components/terminal/EventCompleteScreen";
 import { NewsBriefsPanel } from "@/components/terminal/NewsBriefsPanel";
+import { PinGateOverlay } from "@/components/terminal/PinGateOverlay";
+import { StartCountdown } from "@/components/terminal/StartCountdown";
 import { WalletPanel } from "@/components/terminal/WalletPanel";
 import { useMarketWebSocket } from "@/hooks/useMarketWebSocket";
-import { useGlobalResetPoll } from "@/hooks/useGlobalResetPoll";
 import {
   usePriceChart,
   type MarketPulseStock,
   type PriceUpdatePayload,
 } from "@/hooks/usePriceChart";
-import { apiGet, apiPost, fetchLeaderboardForDisplay, fetchSessionBootstrap, hasRemoteLeaderboard, isLocalInstance, joinSession, pushLeaderboardSnapshot, startLocalSimulation } from "@/lib/api";
+import {
+  apiGet,
+  apiPost,
+  fetchHealthConfig,
+  fetchSessionBootstrap,
+  isLocalInstance,
+  isParticipantEventMode,
+  joinSession,
+  startLocalSimulation,
+  validateEventPin,
+} from "@/lib/api";
 import { isAuthError } from "@/lib/runtimeConfig";
 import {
   markWalletToMarket,
@@ -39,6 +50,7 @@ type IPO = {
 type SimulationState = {
   status?: string;
   trading_enabled?: boolean;
+  elapsed?: string;
 };
 
 function asMoney(v: unknown): string {
@@ -100,26 +112,31 @@ function mapNewsItems(
   }));
 }
 
-function isTimelineKeyError(message: string): boolean {
-  return /timeline|TIMELINE_DECRYPT/i.test(message);
-}
-
-function timelineKeyHelp(): string {
-  return "Event key required — add TIMELINE_DECRYPT_KEY to .env (organizer announces at start) and restart TRADEVERSE.";
-}
-
 export default function TerminalPage() {
+  const eventMode = isParticipantEventMode();
+  const [eventModeResolved, setEventModeResolved] = useState(!isLocalInstance());
+  const [pinRequired, setPinRequired] = useState(eventMode);
   const [traderId, setTraderId] = useState<number | null>(null);
   const [traderName, setTraderName] = useState("Trader");
+  const [eventPin, setEventPin] = useState("");
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [pinLoading, setPinLoading] = useState(false);
+  const [pinUnlocked, setPinUnlocked] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.sessionStorage.getItem("tradeverse_pin_ok") === "1";
+  });
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [startingSim, setStartingSim] = useState(false);
+  const validatedPinRef = useRef("");
+
   const [stocks, setStocks] = useState<SidebarStock[]>([]);
   const [sectors, setSectors] = useState<SectorGroup[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
+  const [tradeCount, setTradeCount] = useState(0);
   const [breaking, setBreaking] = useState<NewsItem | null>(null);
   const [newsFeed, setNewsFeed] = useState<NewsItem[]>([]);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([]);
-  const [showLb, setShowLb] = useState(false);
   const [showWallet, setShowWallet] = useState(false);
   const [showNewsBriefs, setShowNewsBriefs] = useState(false);
   const [ipos, setIpos] = useState<IPO[]>([]);
@@ -132,8 +149,7 @@ export default function TerminalPage() {
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [tradingEnabled, setTradingEnabled] = useState(false);
   const [simStatus, setSimStatus] = useState<string>("not_started");
-  const [countdown, setCountdown] = useState<number | null>(null);
-  const [startingSim, setStartingSim] = useState(false);
+  const [simElapsed, setSimElapsed] = useState<string | null>(null);
   const [wsStatus, setWsStatus] = useState<"LIVE" | "OFF" | "Reconnecting">("OFF");
 
   const selected = useMemo(
@@ -141,10 +157,8 @@ export default function TerminalPage() {
     [stocks, selectedId],
   );
 
-  const { priceSeries, chartLoading, handlePriceUpdate, handleMarketPulse, reloadCharts } = usePriceChart(
-    selectedId,
-    selected?.last_traded_price,
-  );
+  const { priceSeries, chartLoading, handlePriceUpdate, handleMarketPulse, reloadCharts } =
+    usePriceChart(selectedId, selected?.last_traded_price);
 
   const displayWallet = useMemo(
     () => markWalletToMarket(wallet, portfolio, stocks),
@@ -160,6 +174,23 @@ export default function TerminalPage() {
     () => stocks.filter((s) => s.is_open === false),
     [stocks],
   );
+
+  const eventResult = useMemo<EventResult | null>(() => {
+    if (simStatus !== "completed" || !displayWallet) return null;
+    const cash = Number(displayWallet.available_cash ?? 0);
+    const portfolioValue = Number(displayWallet.portfolio_value ?? 0);
+    const holdingsValue = Math.max(0, portfolioValue - cash);
+    return {
+      participantName: traderName,
+      startingCapital: displayWallet.starting_capital ?? "500000",
+      finalCash: displayWallet.available_cash ?? "0",
+      holdingsValue: String(holdingsValue),
+      finalPortfolioValue: displayWallet.portfolio_value ?? "0",
+      pnl: displayWallet.total_pnl ?? "0",
+      returnPct: displayWallet.return_pct ?? "0",
+      tradeCount,
+    };
+  }, [simStatus, displayWallet, traderName, tradeCount]);
 
   const patchStockPrice = useCallback(
     (stockId: number, ltp: string, percentChange?: string) => {
@@ -195,6 +226,7 @@ export default function TerminalPage() {
   const applySimulationState = useCallback((sim: SimulationState | undefined) => {
     if (!sim) return;
     if (sim.status) setSimStatus(String(sim.status));
+    if (sim.elapsed) setSimElapsed(String(sim.elapsed));
     if (typeof sim.trading_enabled === "boolean") {
       setTradingEnabled(sim.trading_enabled);
     } else if (sim.status) {
@@ -210,22 +242,11 @@ export default function TerminalPage() {
     });
   }, []);
 
-  const refreshStocks = useCallback(async () => {
-    const s = await apiGet<SidebarStock[]>("/stocks");
-    setStocks(s);
-    if (!selectedId && s.length) setSelectedId(s[0].id);
-    return s;
-  }, [selectedId]);
-
-  const refreshSectors = useCallback(async () => {
-    const data = await apiGet<SectorGroup[]>("/market/sectors");
-    setSectors(data);
-    return data;
-  }, []);
-
   const applyBootstrap = useCallback(
     (data: Awaited<ReturnType<typeof fetchSessionBootstrap>>) => {
       setTraderId(data.trader_id);
+      if (data.trader_name) setTraderName(data.trader_name);
+      if (data.trade_count != null) setTradeCount(data.trade_count);
       setWallet({
         available_cash: asMoney(data.wallet.available_cash),
         portfolio_value: asMoney(data.wallet.portfolio_value),
@@ -265,7 +286,6 @@ export default function TerminalPage() {
         }
       }
       if (data.sectors?.length) setSectors(data.sectors);
-      if (data.leaderboard?.length) setLeaderboard(data.leaderboard);
       if (data.open_ipos?.length) setIpos(data.open_ipos);
       if (data.released_news?.length) {
         const items = mapNewsItems(data.released_news);
@@ -298,10 +318,9 @@ export default function TerminalPage() {
     const id = explicitTraderId ?? traderId;
     if (!id) return;
     try {
-      const [w, p, lb] = await Promise.all([
+      const [w, p] = await Promise.all([
         apiGet<Wallet>(`/traders/${id}/wallet`),
         apiGet<Portfolio>(`/traders/${id}/portfolio`),
-        fetchLeaderboardForDisplay(),
       ]);
       setWallet({
         available_cash: asMoney(w.available_cash),
@@ -316,7 +335,6 @@ export default function TerminalPage() {
         realized_pnl: p.realized_pnl != null ? asMoney(p.realized_pnl) : undefined,
         cash_blocked_ipo: p.cash_blocked_ipo != null ? asMoney(p.cash_blocked_ipo) : undefined,
       });
-      setLeaderboard(lb);
     } catch (e) {
       const message = e instanceof Error ? e.message : "";
       if (isAuthError(message)) {
@@ -329,50 +347,32 @@ export default function TerminalPage() {
 
   const refresh = useCallback(async () => {
     try {
-      await refreshStocks();
-      await refreshSectors();
+      const s = await apiGet<SidebarStock[]>("/stocks");
+      setStocks(s);
+      if (!selectedId && s.length) setSelectedId(s[0].id);
+      const data = await apiGet<SectorGroup[]>("/market/sectors");
+      setSectors(data);
       const openIpos = await apiGet<IPO[]>("/ipos/open").catch(() => [] as IPO[]);
       setIpos(openIpos);
       if (traderId) await refreshWallet(traderId);
       const news = await apiGet<NewsItem[]>("/news").catch(() => [] as NewsItem[]);
-      if (news.length) {
-        setNewsFeed(mapNewsItems(news.slice(0, 20)));
-      }
+      if (news.length) setNewsFeed(mapNewsItems(news.slice(0, 20)));
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load data");
     }
-  }, [refreshStocks, refreshSectors, refreshWallet, traderId]);
+  }, [refreshWallet, selectedId, traderId]);
 
-  const handleGlobalReset = useCallback(async () => {
-    setSimStatus("not_started");
-    setTradingEnabled(false);
-    setCountdown(null);
-    setStartingSim(false);
-    setBreaking(null);
-    setNewsFeed([]);
-    reloadCharts();
-    try {
-      await resyncBootstrap();
-      await refresh();
-      if (traderId) await refreshWallet(traderId);
-      setToast("Organizer reset everyone's progress and charts. Timer at 0 — press Start when ready.");
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "";
-      if (isAuthError(message) || /not found|Failed to fetch|unreachable/i.test(message)) {
-        localStorage.removeItem("mse_access_token");
-        localStorage.removeItem("mse_trader_id");
-        setTraderId(null);
-        setWallet(null);
-        setPortfolio(null);
-        setToast("Organizer wiped the market — rejoin with your name.");
-      } else {
-        setToast("Organizer reset — press Start when ready.");
-      }
-    }
-  }, [resyncBootstrap, refresh, refreshWallet, traderId, reloadCharts]);
-
-  useGlobalResetPoll(isLocalInstance() && hasRemoteLeaderboard(), handleGlobalReset);
+  useEffect(() => {
+    void fetchHealthConfig()
+      .then((health) => {
+        if (health.participant_event_mode != null) {
+          setPinRequired(Boolean(health.pin_required ?? health.participant_event_mode));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setEventModeResolved(true));
+  }, []);
 
   useEffect(() => {
     void refresh();
@@ -381,11 +381,13 @@ export default function TerminalPage() {
   useEffect(() => {
     const saved = localStorage.getItem("mse_trader_id");
     const token = localStorage.getItem("mse_access_token");
-    if (saved && token) {
+    const savedName = localStorage.getItem("mse_trader_name");
+    if (savedName) setTraderName(savedName);
+    if (saved && token && (!pinRequired || pinUnlocked)) {
       setTraderId(Number(saved));
       void resyncBootstrap();
     }
-  }, [resyncBootstrap]);
+  }, [resyncBootstrap, pinRequired, pinUnlocked]);
 
   useEffect(() => {
     if (!breaking) return;
@@ -430,12 +432,10 @@ export default function TerminalPage() {
       }
       if (msg.event === "TRADE_EXECUTED") {
         void refreshWallet();
+        setTradeCount((c) => c + 1);
       }
       if (msg.event === "WALLET_UPDATED" || msg.event === "PORTFOLIO_UPDATED") {
         void refreshWallet();
-      }
-      if (msg.event === "LEADERBOARD_UPDATE") {
-        fetchLeaderboardForDisplay().then(setLeaderboard).catch(() => {});
       }
       if (msg.event === "IPO_OPENED" || msg.event === "IPO_RESULT" || msg.event === "IPO_LISTED") {
         apiGet<IPO[]>("/ipos/open").then(setIpos).catch(() => []);
@@ -443,12 +443,6 @@ export default function TerminalPage() {
       }
     },
   });
-
-  useEffect(() => {
-    if (!traderId) return;
-    const id = window.setInterval(() => void pushLeaderboardSnapshot(), 45_000);
-    return () => window.clearInterval(id);
-  }, [traderId]);
 
   useEffect(() => {
     if (reconnecting) setWsStatus("Reconnecting");
@@ -466,43 +460,63 @@ export default function TerminalPage() {
     return () => window.clearTimeout(id);
   }, [toast]);
 
+  const beginEventStart = useCallback(async () => {
+    const pin = validatedPinRef.current;
+    setStartingSim(true);
+    setError(null);
+    try {
+      const created = await joinSession(traderName || "Trader");
+      setTraderId(created.trader_id);
+      await startLocalSimulation(pin);
+      setSimStatus("running");
+      setTradingEnabled(true);
+      await resyncBootstrap();
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not start simulation");
+      setPinUnlocked(false);
+      window.sessionStorage.removeItem("tradeverse_pin_ok");
+    } finally {
+      setStartingSim(false);
+    }
+  }, [traderName, resyncBootstrap, refresh]);
+
   useEffect(() => {
     if (countdown === null) return;
     if (countdown <= 0) {
       setCountdown(null);
-      void (async () => {
-        setStartingSim(true);
-        setError(null);
-        try {
-          await startLocalSimulation();
-          setSimStatus("running");
-          setTradingEnabled(true);
-          await resyncBootstrap();
-          await refresh();
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : "Could not start simulation";
-          setError(isTimelineKeyError(msg) ? timelineKeyHelp() : msg);
-        } finally {
-          setStartingSim(false);
-        }
-      })();
+      void beginEventStart();
       return;
     }
     const id = window.setTimeout(() => setCountdown((c) => (c === null ? null : c - 1)), 1000);
     return () => window.clearTimeout(id);
-  }, [countdown, refresh, resyncBootstrap]);
+  }, [countdown, beginEventStart]);
+
+  async function handlePinSubmit() {
+    setPinLoading(true);
+    setPinError(null);
+    try {
+      await validateEventPin(eventPin.trim());
+      validatedPinRef.current = eventPin.trim();
+      window.sessionStorage.setItem("tradeverse_pin_ok", "1");
+      setPinUnlocked(true);
+      setCountdown(3);
+    } catch (e) {
+      setPinError(e instanceof Error ? e.message : "Invalid PIN");
+    } finally {
+      setPinLoading(false);
+    }
+  }
 
   async function join() {
     try {
       const created = await joinSession(traderName || "Trader");
       setTraderId(created.trader_id);
-      void pushLeaderboardSnapshot();
       await resyncBootstrap();
       await refreshWallet(created.trader_id);
       await refresh();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Could not join session";
-      setError(isTimelineKeyError(msg) ? timelineKeyHelp() : msg);
+      setError(e instanceof Error ? e.message : "Could not join session");
     }
   }
 
@@ -557,74 +571,38 @@ export default function TerminalPage() {
     }
   }
 
-  const inputCls =
-    "w-full rounded border border-[var(--line)] bg-[var(--background)] px-3 py-2.5 font-sans text-[var(--foreground)] outline-none focus:border-[var(--accent)]";
   const latestNews = newsFeed[0] ?? breaking;
+  const showPinGate = eventModeResolved && pinRequired && !pinUnlocked;
+  const showCountdown = countdown !== null && countdown > 0;
 
-  if (!traderId) {
+  if (!eventModeResolved) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-black text-[var(--muted)]">
+        Loading…
+      </div>
+    );
+  }
+
+  if (!pinRequired && !traderId) {
     return (
       <div className="min-h-screen font-sans text-[var(--foreground)]">
         <div className="mx-auto max-w-sm px-4 py-16">
           <h1 className="text-xl font-bold tracking-widest">TRADEVERSE</h1>
-          <p className="mt-2 text-sm text-[var(--muted)]">
-            Enter your name to join the simulation. You&apos;ll trade on your laptop while scores sync
-            to the live leaderboard.
-          </p>
+          <p className="mt-2 text-sm text-[var(--muted)]">Enter your name to join the simulation.</p>
           <input
-            className={`${inputCls} mt-6`}
+            className="mt-6 w-full rounded border border-[var(--line)] bg-[var(--background)] px-3 py-2.5"
             value={traderName}
             onChange={(e) => setTraderName(e.target.value)}
             placeholder="Your name"
           />
           <button
             type="button"
-            className="mt-4 w-full rounded border border-[var(--accent)] py-2.5 font-medium text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/10"
+            className="mt-4 w-full rounded border border-[var(--accent)] py-2.5 text-[var(--accent)]"
             onClick={join}
           >
             Continue
           </button>
           {error && <p className="mt-3 text-sm text-[#ef4444]">{error}</p>}
-        </div>
-      </div>
-    );
-  }
-
-  if (
-    isLocalInstance() &&
-    simStatus !== "running" &&
-    simStatus !== "completed" &&
-    simStatus !== "paused"
-  ) {
-    return (
-      <div className="min-h-screen font-sans text-[var(--foreground)]">
-        <div className="mx-auto max-w-md px-4 py-16 text-center">
-          <h1 className="text-xl font-bold tracking-widest">Waiting to start</h1>
-          <p className="mt-3 text-sm text-[var(--muted)]">
-            When the organizer says go, press Start or use the 30-second countdown.
-          </p>
-          {countdown !== null ? (
-            <p className="mt-10 font-mono text-6xl tabular-nums text-[var(--accent)]">{countdown}</p>
-          ) : (
-            <div className="mt-10 flex flex-col gap-3">
-              <button
-                type="button"
-                className="rounded border border-[var(--accent)] py-3 text-lg text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/10"
-                disabled={startingSim}
-                onClick={() => setCountdown(30)}
-              >
-                30s countdown
-              </button>
-              <button
-                type="button"
-                className="rounded border border-[var(--line)] py-3 text-lg text-[var(--foreground)] transition-colors hover:bg-white/5"
-                disabled={startingSim}
-                onClick={() => setCountdown(0)}
-              >
-                {startingSim ? "Starting…" : "Start now"}
-              </button>
-            </div>
-          )}
-          {error && <p className="mt-6 text-sm text-[#ef4444]">{error}</p>}
         </div>
       </div>
     );
@@ -638,8 +616,7 @@ export default function TerminalPage() {
         pnl={displayWallet?.total_pnl}
         ret={displayWallet?.return_pct}
         tradingEnabled={tradingEnabled}
-        onLeaderboard={() => setShowLb((v) => !v)}
-        showLeaderboard={showLb}
+        elapsed={simElapsed}
         onWallet={() => setShowWallet((v) => !v)}
         showWallet={showWallet}
       />
@@ -688,7 +665,7 @@ export default function TerminalPage() {
           qty={qty}
           onQtyChange={setQty}
           holdingQty={holdingQty}
-          tradingEnabled={tradingEnabled}
+          tradingEnabled={tradingEnabled && simStatus !== "completed"}
           onBuy={() => openConfirm("buy")}
           onSell={() => openConfirm("sell")}
           confirmSide={confirmSide}
@@ -703,18 +680,10 @@ export default function TerminalPage() {
         />
       </div>
 
-      {showLb && (
-        <div className="border-t border-[var(--line)] bg-[var(--panel)]/40 p-4">
-          <Leaderboard rows={leaderboard} variant="terminal" highlightTraderId={traderId} maxRows={15} />
-        </div>
-      )}
-
       {error && <p className="px-4 py-2 text-xs text-[#ef4444]">{error}</p>}
 
       {toast && (
-        <div
-          className="fixed bottom-4 left-4 max-w-sm rounded border border-[var(--line)] bg-[var(--panel)] p-3 text-xs shadow-lg"
-        >
+        <div className="fixed bottom-4 left-4 max-w-sm rounded border border-[var(--line)] bg-[var(--panel)] p-3 text-xs shadow-lg">
           {toast}
           <button
             type="button"
@@ -725,6 +694,22 @@ export default function TerminalPage() {
           </button>
         </div>
       )}
+
+      {showPinGate && (
+        <PinGateOverlay
+          name={traderName}
+          pin={eventPin}
+          error={pinError}
+          loading={pinLoading || startingSim}
+          onNameChange={setTraderName}
+          onPinChange={setEventPin}
+          onSubmit={() => void handlePinSubmit()}
+        />
+      )}
+
+      {showCountdown && <StartCountdown value={countdown} />}
+
+      {eventResult && <EventCompleteScreen result={eventResult} />}
     </div>
   );
 }

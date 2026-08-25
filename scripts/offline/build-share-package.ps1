@@ -1,8 +1,16 @@
 # Builds Tradeverse-Participant.zip for sharing with club members
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$TimelineKey,
+    [Parameter(Mandatory = $true)]
+    [string]$EventPin
+)
+
 $ErrorActionPreference = "Stop"
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $OutDir = Join-Path $Root "dist-package"
 $ZipPath = Join-Path $Root "Tradeverse-Participant.zip"
+$FrontendDir = Join-Path $Root "frontend"
 
 $excludeNames = @(
     ".git", "node_modules", "__pycache__", ".next", ".venv",
@@ -59,13 +67,37 @@ if (-not (Test-Path $encPath)) {
 if (Test-Path $OutDir) { Remove-Item $OutDir -Recurse -Force }
 New-Item -ItemType Directory -Path $OutDir | Out-Null
 
+Write-Host "Building static participant frontend..."
+Push-Location $FrontendDir
+if (-not (Test-Path "node_modules")) { npm install }
+$env:PARTICIPANT_BUILD = "1"
+npm run build
+Pop-Location
+if ($LASTEXITCODE -ne 0) { throw "frontend build failed" }
+
 Copy-Tree $Root $OutDir ""
-Copy-Item (Join-Path $Root ".env.offline-participant.example") (Join-Path $OutDir ".env.offline-participant.example")
 Copy-Item (Join-Path $Root "Start-TRADEVERSE.bat") (Join-Path $OutDir "Start-TRADEVERSE.bat") -ErrorAction SilentlyContinue
 Copy-Item (Join-Path $Root "Start-TRADEVERSE-Participant.bat") (Join-Path $OutDir "Start-TRADEVERSE-Participant.bat") -ErrorAction SilentlyContinue
 if (Test-Path (Join-Path $Root "PARTICIPANT-README.md")) {
     Copy-Item (Join-Path $Root "PARTICIPANT-README.md") (Join-Path $OutDir "PARTICIPANT-README.md")
 }
+
+$envScript = Join-Path $Root "backend\scripts\build_event_env.py"
+$envOut = Join-Path $OutDir ".env"
+python $envScript --timeline-key $TimelineKey --event-pin $EventPin --output $envOut
+if ($LASTEXITCODE -ne 0) { throw "build_event_env.py failed" }
+
+$runtimeOut = Join-Path $OutDir "frontend\public\tradeverse-runtime.json"
+@'
+{
+  "apiUrl": "http://127.0.0.1:8765",
+  "wsUrl": "ws://127.0.0.1:8765",
+  "apiPrefix": "/api/v1",
+  "localInstance": true,
+  "participantEventMode": true,
+  "pinRequired": true
+}
+'@ | Set-Content -Path $runtimeOut -Encoding UTF8
 
 # Replace universe with participant-safe copy (no phase/IPO/dissolution schedule spoilers)
 $sanitizeScript = Join-Path $Root "backend\scripts\sanitize_universe_for_participants.py"
@@ -84,5 +116,5 @@ Compress-Archive -Path (Join-Path $OutDir "*") -DestinationPath $ZipPath -Force
 Write-Host "Created: $ZipPath"
 Write-Host ""
 Write-Host "Send participants: Tradeverse-Participant.zip"
-Write-Host "Share separately (NOT in zip): Supabase URL + anon key, TIMELINE_DECRYPT_KEY at event start"
-Write-Host "Requires on each laptop: Python 3.11-3.13 and Node.js 18+"
+Write-Host "Announce EVENT_PIN verbally at event start (also baked into each package)."
+Write-Host "Requires on each laptop: Python 3.11-3.13 (Node only needed for organizer rebuilds)."

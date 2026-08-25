@@ -78,8 +78,6 @@ async def _broadcast_messages(messages: list[tuple[str, dict[str, Any]]]) -> Non
 
 
 async def _maybe_run_ai_tick(elapsed: float) -> None:
-    if get_settings().local_instance_mode:
-        return
     try:
         with SessionLocal() as db:
             settings = get_or_create_settings(db)
@@ -98,8 +96,6 @@ async def _maybe_run_ai_tick(elapsed: float) -> None:
 
 async def _immediate_news_reaction(elapsed: float) -> None:
     """Pulse liquidity and run AI immediately after a timeline NEWS event."""
-    if get_settings().local_instance_mode:
-        return
     try:
         with SessionLocal() as db:
             settings = get_or_create_settings(db)
@@ -223,7 +219,7 @@ async def _loop() -> None:
                     settings = get_or_create_settings(db)
                     state = get_or_create_state(db)
                     pulse_interval = 3.0 if get_settings().local_instance_mode else MARKET_PULSE_INTERVAL_REAL
-                    if settings.simulation_ai_enabled and not get_settings().local_instance_mode:
+                    if settings.simulation_ai_enabled:
                         if elapsed - float(state.last_ai_tick_elapsed_sec) >= AI_TICK_INTERVAL_SEC:
                             ai_tick_elapsed = elapsed
 

@@ -35,6 +35,23 @@ class OrganizerResetBody(BaseModel):
     passkey: str = Field(min_length=1)
 
 
+class EventStartBody(BaseModel):
+    event_pin: str = Field(min_length=1, max_length=32)
+
+
+def _require_event_mode() -> None:
+    if not get_settings().participant_event_mode:
+        raise HTTPException(status_code=404, detail="event mode disabled")
+
+
+def _validate_event_pin(pin: str) -> None:
+    expected = (get_settings().event_pin or "").strip()
+    if not expected:
+        raise HTTPException(status_code=503, detail="event pin not configured")
+    if pin.strip() != expected:
+        raise HTTPException(status_code=403, detail="invalid event pin")
+
+
 def _require_local_mode() -> None:
     if not get_settings().local_instance_mode:
         raise HTTPException(status_code=404, detail="local simulation API disabled")
@@ -71,6 +88,23 @@ def simulation_bootstrap(db: Session = Depends(get_db)) -> dict:
 @router.post("/start")
 def simulation_start(db: Session = Depends(get_db)) -> dict:
     _require_local_mode()
+    if get_settings().participant_event_mode:
+        raise HTTPException(status_code=403, detail="use /simulation/event-start in event mode")
+    try:
+        return _participant_sim_response(db, start_simulation(db))
+    except SimulationControlError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/event-start")
+def simulation_event_start(
+    body: EventStartBody,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Event mode: validate PIN locally and auto-start the simulation."""
+    _require_local_mode()
+    _require_event_mode()
+    _validate_event_pin(body.event_pin)
     try:
         return _participant_sim_response(db, start_simulation(db))
     except SimulationControlError as exc:
@@ -80,6 +114,8 @@ def simulation_start(db: Session = Depends(get_db)) -> dict:
 @router.post("/stop")
 def simulation_stop(db: Session = Depends(get_db)) -> dict:
     _require_local_mode()
+    if get_settings().participant_event_mode:
+        raise HTTPException(status_code=403, detail="participants cannot stop the simulation")
     try:
         return _participant_sim_response(db, stop_simulation(db))
     except SimulationControlError as exc:
@@ -89,6 +125,8 @@ def simulation_stop(db: Session = Depends(get_db)) -> dict:
 @router.post("/reset")
 def simulation_reset(db: Session = Depends(get_db)) -> dict:
     _require_local_mode()
+    if get_settings().participant_event_mode:
+        raise HTTPException(status_code=403, detail="participants cannot reset the simulation")
     try:
         return _participant_sim_response(db, reset_simulation(db))
     except SimulationControlError as exc:
@@ -223,6 +261,8 @@ async def export_snapshot(
     trader: Trader = Depends(require_trader),
 ) -> dict:
     _require_local_mode()
+    if get_settings().participant_event_mode:
+        raise HTTPException(status_code=404, detail="export disabled in event mode")
     payload = build_snapshot_payload(db, trader.id)
     await push_snapshot(trader.id)
     return payload

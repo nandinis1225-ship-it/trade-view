@@ -8,9 +8,10 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.security import require_trader
-from app.models import NewsEvent, Trader
+from app.models import NewsEvent, Trade, Trader
 from app.services import ipo_service, leaderboard_service, portfolio_service, sector_service, stock_service
 from app.services import news_service
 from app.services.simulation_clock import participant_status_dict
@@ -53,17 +54,6 @@ def session_bootstrap(
     news_rows = []
     for event in news_service.list_news(db, released_only=True)[:20]:
         news_rows.append(news_service.participant_news_dict(event))
-    leaderboard_rows = [
-        {
-            "rank": r["rank"],
-            "trader_id": r["trader_id"],
-            "name": r["name"],
-            "portfolio_value": str(r["portfolio_value"]),
-            "return_pct": str(r["return_pct"]),
-            "trade_count": int(r.get("trade_count") or 0),
-        }
-        for r in leaderboard_service.compute_leaderboard(db)[:15]
-    ]
     open_ipos = [
         _ipo_dict(i) for i in ipo_service.list_ipos(db) if i.status.value == "open"
     ]
@@ -77,7 +67,13 @@ def session_bootstrap(
         }
         for a in ipo_service.list_applications(db, trader_id=trader.id)
     ]
-    return {
+    trade_count = db.scalar(
+        select(func.count(Trade.id)).where(
+            (Trade.buyer_id == trader.id) | (Trade.seller_id == trader.id)
+        )
+    ) or 0
+    settings = get_settings()
+    payload = {
         "simulation": participant_status_dict(db),
         "wallet": wallet,
         "portfolio": portfolio,
@@ -97,11 +93,26 @@ def session_bootstrap(
         "sectors": sector_service.sector_summary(db),
         "released_news_count": int(released_news),
         "released_news": news_rows,
-        "leaderboard": leaderboard_rows,
         "open_ipos": open_ipos,
         "ipo_applications": ipo_apps,
         "trader_id": trader.id,
+        "trader_name": trader.name,
+        "trade_count": int(trade_count),
     }
+    if not settings.participant_event_mode:
+        leaderboard_rows = [
+            {
+                "rank": r["rank"],
+                "trader_id": r["trader_id"],
+                "name": r["name"],
+                "portfolio_value": str(r["portfolio_value"]),
+                "return_pct": str(r["return_pct"]),
+                "trade_count": int(r.get("trade_count") or 0),
+            }
+            for r in leaderboard_service.compute_leaderboard(db)[:15]
+        ]
+        payload["leaderboard"] = leaderboard_rows
+    return payload
 
 
 @router.post("/push-leaderboard")
@@ -110,6 +121,10 @@ async def push_leaderboard_snapshot(
     trader: Trader = Depends(require_trader),
 ) -> dict:
     """Push this trader's portfolio snapshot to Supabase or LAN collector."""
+    if get_settings().participant_event_mode:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail="leaderboard disabled in event mode")
     from app.services.leaderboard_sync_service import build_snapshot_payload, push_snapshot
 
     payload = build_snapshot_payload(db, trader.id)

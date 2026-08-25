@@ -130,6 +130,8 @@ async def push_snapshot(trader_id: int) -> bool:
 
 def leaderboard_sync_configured() -> bool:
     settings = get_settings()
+    if settings.participant_event_mode:
+        return False
     if settings.supabase_url and settings.supabase_anon_key:
         return True
     return bool((settings.leaderboard_sync_url or "").strip())

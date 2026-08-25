@@ -75,7 +75,12 @@ def bootstrap_universe(db: Session) -> dict:
             f"TRADEVERSE universe incomplete: expected {expected} tradable stocks, found {canonical_count}"
         )
     timeline_created = seed_timeline_from_json(db)
-    if settings.local_instance_mode:
+    cfg = get_settings()
+    if settings.local_instance_mode and cfg.participant_event_mode:
+        agents = ai_runner.seed_default_agents(db)
+        ai_runner.sync_intensity_configs(db)
+        liquidity = seed_all_liquidity(db)
+    elif settings.local_instance_mode:
         agents = 0
         liquidity = 0
     else:
@@ -150,8 +155,9 @@ def start_simulation(db: Session) -> dict:
         seed_timeline_from_json(db)
 
     settings = get_or_create_settings(db)
-    if get_settings().local_instance_mode:
-        settings.simulation_ai_enabled = False
+    cfg = get_settings()
+    if cfg.local_instance_mode:
+        settings.simulation_ai_enabled = bool(cfg.participant_event_mode)
     state.sim_duration_sec = float(settings.sim_duration_sec or 10800)
     from app.services.simulation_settings_service import sync_runtime_speed_from_settings
 

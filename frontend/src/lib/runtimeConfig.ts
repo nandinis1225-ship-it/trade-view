@@ -6,6 +6,8 @@ export type TradeverseRuntimeConfig = {
   supabaseAnonKey?: string;
   supabaseLeaderboardTable?: string;
   localInstance?: boolean;
+  participantEventMode?: boolean;
+  pinRequired?: boolean;
 };
 
 declare global {

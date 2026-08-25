@@ -33,6 +33,9 @@ def health() -> dict:
         "database": "ok" if db_ok else "down",
         "simulation": sim_status,
         "engine": engine,
+        "participant_event_mode": settings.participant_event_mode,
+        "pin_required": bool(settings.participant_event_mode and settings.event_pin),
+        "local_instance_mode": settings.local_instance_mode,
     }
 
 

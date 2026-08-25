@@ -406,11 +406,31 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $Port = if ($env:BACKEND_PORT) { $env:BACKEND_PORT } else { "8765" }
-$terminalUrl = "http://127.0.0.1:3000/terminal"
+$eventMode = ($env:PARTICIPANT_EVENT_MODE -eq "true")
+$serveStatic = ($env:SERVE_STATIC_UI -eq "true") -or $eventMode
+$terminalUrl = if ($serveStatic) { "http://127.0.0.1:$Port/terminal" } else { "http://127.0.0.1:3000/terminal" }
 $marketUrl = "https://frontend-azure-three-51.vercel.app/market-screen"
 
-# Frontend deps
-if (-not (Test-Path (Join-Path $FrontendDir "node_modules"))) {
+if ($serveStatic -and -not (Test-Path (Join-Path $FrontendDir "out\terminal\index.html")) -and -not (Test-Path (Join-Path $FrontendDir "out\terminal.html"))) {
+    Write-Host "Building static frontend (one-time)..." -ForegroundColor Yellow
+    if (-not (Test-Path (Join-Path $FrontendDir "node_modules"))) {
+        Push-Location $FrontendDir
+        npm install
+        Pop-Location
+    }
+    Push-Location $FrontendDir
+    $env:PARTICIPANT_BUILD = "1"
+    npm run build
+    Pop-Location
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "ERROR: Frontend build failed." -ForegroundColor Red
+        Read-Host "Press Enter to close"
+        exit 1
+    }
+}
+
+# Frontend deps (dev mode only)
+if (-not $serveStatic -and -not (Test-Path (Join-Path $FrontendDir "node_modules"))) {
     Write-Host "First run: installing Node packages (3-8 min)..." -ForegroundColor Yellow
     Push-Location $FrontendDir
     npm install
@@ -429,9 +449,12 @@ $backendProc = Start-Process -FilePath $uvicornExe -ArgumentList @(
     "app.main:app", "--host", "127.0.0.1", "--port", $Port, "--workers", "1"
 ) -WorkingDirectory $BackendDir -RedirectStandardOutput $backendLog -RedirectStandardError $backendErr -PassThru -WindowStyle Hidden
 
-$frontendProc = Start-Process -FilePath "cmd.exe" -ArgumentList @(
-    "/c", "npm run dev -- --hostname 127.0.0.1 --port 3000"
-) -WorkingDirectory $FrontendDir -RedirectStandardOutput $frontendLog -RedirectStandardError $frontendErr -PassThru -WindowStyle Hidden
+$frontendProc = $null
+if (-not $serveStatic) {
+    $frontendProc = Start-Process -FilePath "cmd.exe" -ArgumentList @(
+        "/c", "npm run dev -- --hostname 127.0.0.1 --port 3000"
+    ) -WorkingDirectory $FrontendDir -RedirectStandardOutput $frontendLog -RedirectStandardError $frontendErr -PassThru -WindowStyle Hidden
+}
 
 Write-Host "Waiting for backend on port $Port..."
 $healthOk = $false
@@ -453,13 +476,15 @@ if (-not $healthOk) {
 }
 
 Write-Host "Waiting for frontend..."
-$frontOk = $false
-for ($i = 0; $i -lt 90; $i++) {
-    try {
-        $r = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -UseBasicParsing -TimeoutSec 2
-        if ($r.StatusCode -eq 200) { $frontOk = $true; break }
-    } catch { }
-    Start-Sleep -Seconds 1
+$frontOk = $serveStatic
+if (-not $serveStatic) {
+    for ($i = 0; $i -lt 90; $i++) {
+        try {
+            $r = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -UseBasicParsing -TimeoutSec 2
+            if ($r.StatusCode -eq 200) { $frontOk = $true; break }
+        } catch { }
+        Start-Sleep -Seconds 1
+    }
 }
 
 Write-Host ""
@@ -468,10 +493,15 @@ Write-Host "  TRADEVERSE is running" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Trade here:  $terminalUrl"
-Write-Host "  Projector (organizer only): http://127.0.0.1:3000/market-screen?organizer=finclub123"
-Write-Host "  Projector (leaderboard only, any device): $marketUrl"
-Write-Host ""
-Write-Host "  Enter your name, then Start when ready."
+if (-not $eventMode) {
+    Write-Host "  Projector (organizer only): http://127.0.0.1:3000/market-screen?organizer=finclub123"
+    Write-Host "  Projector (leaderboard only, any device): $marketUrl"
+    Write-Host ""
+    Write-Host "  Enter your name, then Start when ready."
+} else {
+    Write-Host ""
+    Write-Host "  Enter the event PIN when prompted. The simulation starts automatically."
+}
 Write-Host "  Close this window to stop the game."
 Write-Host ""
 

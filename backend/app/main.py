@@ -110,21 +110,25 @@ def create_app() -> FastAPI:
     if settings.serve_static_ui:
         from pathlib import Path
 
+        from fastapi.responses import RedirectResponse
         from fastapi.staticfiles import StaticFiles
 
         static_dir = Path(__file__).resolve().parents[2] / "frontend" / "out"
         if static_dir.is_dir():
-            app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static-ui")
+            @app.get("/")
+            def root_redirect():
+                return RedirectResponse(url="/terminal", status_code=302)
 
-    @app.get("/")
-    def root() -> dict:
-        return {
-            "message": settings.app_name,
-            "phase": 14,
-            "docs": "/docs",
-            "health": f"{prefix}/health",
-            "ws": f"{prefix}/ws",
-        }
+            app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static-ui")
+    else:
+        @app.get("/")
+        def root() -> dict:
+            return {
+                "message": settings.app_name,
+                "docs": f"{prefix}/health",
+                "health": f"{prefix}/health",
+                "ws": f"{prefix}/ws",
+            }
 
     return app
 

@@ -68,6 +68,8 @@ class Settings(BaseSettings):
 
     # Local offline edition
     local_instance_mode: bool = Field(default=False, validation_alias="LOCAL_INSTANCE_MODE")
+    participant_event_mode: bool = Field(default=False, validation_alias="PARTICIPANT_EVENT_MODE")
+    event_pin: str = Field(default="", validation_alias="EVENT_PIN")
     leaderboard_sync_url: str | None = Field(default=None, validation_alias="LEADERBOARD_SYNC_URL")
     supabase_url: str | None = Field(default=None, validation_alias="SUPABASE_URL")
     supabase_anon_key: str | None = Field(default=None, validation_alias="SUPABASE_ANON_KEY")

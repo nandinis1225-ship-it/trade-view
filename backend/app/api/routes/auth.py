@@ -34,6 +34,14 @@ class JoinResponse(BaseModel):
     session_id: str | None = None
 
 
+class PinValidateRequest(BaseModel):
+    pin: str = Field(min_length=1, max_length=32)
+
+
+class PinValidateResponse(BaseModel):
+    ok: bool = True
+
+
 class AdminLoginRequest(BaseModel):
     secret: str
 
@@ -99,6 +107,24 @@ def join_session(
         access_token=token,
         session_id=trader.session_id or session_id,
     )
+
+
+@router.post("/validate-pin", response_model=PinValidateResponse)
+def validate_event_pin(
+    request: Request,
+    payload: PinValidateRequest,
+) -> PinValidateResponse:
+    """Validate event PIN locally — no network sync."""
+    enforce_rate_limit(request)
+    settings = get_settings()
+    if not settings.participant_event_mode:
+        return PinValidateResponse(ok=True)
+    expected = (settings.event_pin or "").strip()
+    if not expected:
+        raise HTTPException(status_code=503, detail="event pin not configured")
+    if payload.pin.strip() != expected:
+        raise HTTPException(status_code=403, detail="invalid event pin")
+    return PinValidateResponse(ok=True)
 
 
 @router.post("/admin/login", response_model=AdminLoginResponse)

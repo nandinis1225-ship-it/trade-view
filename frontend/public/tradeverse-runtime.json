@@ -1,1 +1,8 @@
-﻿{"wsUrl":"ws://127.0.0.1:8765","apiPrefix":"/api/v1","supabaseLeaderboardTable":"participant_snapshots","localInstance":true,"supabaseAnonKey":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsYW52end0ZmpzeHFkcm5lcnliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2Mzc3NTcsImV4cCI6MjEwMzIxMzc1N30.yq-QLYSmokSzt6EkIJlNcqgefUir7cGjmwQxP9XsWys","supabaseUrl":"https://zlanvzwtfjsxqdrneryb.supabase.co","apiUrl":"http://127.0.0.1:8765"}
+﻿{
+  "apiUrl": "http://127.0.0.1:8765",
+  "wsUrl": "ws://127.0.0.1:8765",
+  "apiPrefix": "/api/v1",
+  "localInstance": true,
+  "participantEventMode": true,
+  "pinRequired": true
+}
