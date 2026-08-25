@@ -34,6 +34,13 @@ forbidden_patterns=(
 )
 
 forbidden_dirs=(admin market-screen developer)
+forbidden_db=(mse_dev.db mse_dev.db-shm mse_dev.db-wal)
+
+for db in "${forbidden_db[@]}"; do
+  if find "$ROOT" -name "$db" -print -quit 2>/dev/null | grep -q .; then
+    failures+=("Development database must not be shipped: $db")
+  fi
+done
 
 scan() {
   local path="$1"

@@ -29,6 +29,13 @@ def main() -> None:
     settings = get_settings()
     host = os.environ.get("BACKEND_HOST", settings.backend_host)
     port = int(os.environ.get("BACKEND_PORT", settings.backend_port))
+
+    if getattr(sys, "frozen", False) and host in ("0.0.0.0", "::"):
+        raise SystemExit(
+            "Packaged TRADEVERSE backend must bind to 127.0.0.1 only. "
+            f"Refusing host={host!r}."
+        )
+
     uvicorn.run(
         "app.main:app",
         host=host,

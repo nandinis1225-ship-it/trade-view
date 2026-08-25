@@ -1,8 +1,25 @@
 # Phase 3.5 — Production Packaging Guide
 
-## Overview
+## Browser distribution (recommended)
 
-Each participant receives **one desktop application** that runs fully offline:
+Participants double-click a launcher; the **bundled backend** starts and the **default browser** opens the trading terminal. No Tauri, Rust, or desktop app required.
+
+| Platform | Build command | Participant starts |
+|----------|---------------|-------------------|
+| Windows | `.\scripts\offline\Build-Browser-Participant.ps1 -EventPin "<PIN>"` | `Start-Tradeverse.bat` |
+| macOS | `./scripts/offline/build-browser-participant-macos.sh "<PIN>"` | `Start-Tradeverse.command` |
+
+Output: `participant-build/{windows,macos}/TRADEVERSE/`
+
+See **[BROWSER_EVENT_GUIDE.md](BROWSER_EVENT_GUIDE.md)** for organizer and participant instructions.
+
+> **Tauri desktop app (deferred):** `Build-Participant.ps1` / `build-participant-macos.sh` still build `TRADEVERSE.exe` / `TRADEVERSE.app` for future native-shell packaging. Tauri source is preserved in `desktop/src-tauri/`.
+
+---
+
+## Overview (Tauri desktop — deferred)
+
+Each participant can alternatively receive **one desktop application** that runs fully offline:
 
 | Platform | Deliverable | Backend sidecar |
 |----------|-------------|-----------------|
