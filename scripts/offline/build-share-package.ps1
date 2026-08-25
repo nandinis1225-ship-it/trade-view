@@ -80,8 +80,7 @@ New-Item -ItemType Directory -Path $OutDir | Out-Null
 Write-Host "Building static participant frontend..."
 Push-Location $FrontendDir
 if (-not (Test-Path "node_modules")) { npm install }
-$env:PARTICIPANT_BUILD = "1"
-npm run build
+npm run build:participant
 Pop-Location
 if ($LASTEXITCODE -ne 0) { throw "frontend build failed" }
 
