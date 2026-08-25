@@ -623,6 +623,7 @@ export type HealthResponse = {
   participant_event_mode?: boolean;
   pin_required?: boolean;
   local_instance_mode?: boolean;
+  developer_mode?: boolean;
 };
 
 export async function fetchHealthConfig(): Promise<HealthResponse> {

@@ -170,12 +170,14 @@ def seed_stocks_from_json(db: Session, *, skip_existing: bool = True) -> int:
 
 
 def apply_universe_simulation_settings(db: Session) -> None:
+    from app.core.config import get_settings
     from app.services.simulation_settings_service import get_or_create_settings
 
     const = universe_constants()
     settings = get_or_create_settings(db)
     settings.sim_duration_sec = const["sim_duration_sec"]
     settings.simulation_seed = const["default_simulation_seed"]
-    settings.simulation_ai_enabled = get_settings().participant_event_mode
+    cfg = get_settings()
+    settings.simulation_ai_enabled = bool(cfg.participant_event_mode or cfg.developer_mode)
     db.commit()
 

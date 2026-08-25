@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.developer_guard import require_developer_mode
 from app.core.database import get_db
 from app.core.security import require_trader
 from app.models import Trader
@@ -66,6 +67,10 @@ def _require_organizer_client(request: Request) -> None:
 def _require_organizer_passkey(body: OrganizerResetBody) -> None:
     if body.passkey != get_settings().organizer_passkey:
         raise HTTPException(status_code=403, detail="invalid organizer passkey")
+
+
+def _require_developer_mode() -> None:
+    require_developer_mode()
 
 
 def _participant_sim_response(db: Session, result: dict) -> dict:
@@ -140,6 +145,7 @@ async def organizer_stop(
     db: Session = Depends(get_db),
 ) -> dict:
     """Organizer-only: pause the market clock on this laptop."""
+    _require_developer_mode()
     _require_local_mode()
     _require_organizer_client(request)
     _require_organizer_passkey(body)
@@ -156,6 +162,7 @@ async def organizer_reset_all(
     db: Session = Depends(get_db),
 ) -> dict:
     """Organizer-only: reset local market, signal all participants, clear cloud leaderboard."""
+    _require_developer_mode()
     _require_local_mode()
     _require_organizer_client(request)
     _require_organizer_passkey(body)
@@ -178,6 +185,7 @@ async def organizer_fresh_wipe(
     request: Request,
 ) -> dict:
     """Organizer-only: delete local SQLite + caches, signal everyone to rejoin."""
+    _require_developer_mode()
     _require_local_mode()
     _require_organizer_client(request)
     _require_organizer_passkey(body)
@@ -201,6 +209,7 @@ async def organizer_build_participant_zip(
     request: Request,
 ) -> dict:
     """Organizer-only: build Tradeverse-Participant.zip in the project folder."""
+    _require_developer_mode()
     _require_local_mode()
     _require_organizer_client(request)
     _require_organizer_passkey(body)
@@ -217,6 +226,7 @@ async def organizer_market_dashboard(
     db: Session = Depends(get_db),
 ) -> dict:
     """Organizer-only: full market view with phase and sector impacts for projector."""
+    _require_developer_mode()
     _require_local_mode()
     _require_organizer_client(request)
     _require_organizer_passkey(body)

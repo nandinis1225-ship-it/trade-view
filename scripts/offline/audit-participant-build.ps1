@@ -9,8 +9,13 @@ $forbiddenPatterns = @(
     "current_phase",
     "tradeverse_timeline.json",
     "Start now",
-    "30s countdown"
+    "30s countdown",
+    "OrganizerDebugPanel",
+    "/developer",
+    "adminLogin"
 )
+
+$forbiddenDirs = @("admin", "market-screen", "developer")
 
 $scanPaths = @(
     (Join-Path $Root "frontend\out"),
@@ -21,6 +26,12 @@ $scanPaths = @(
 foreach ($path in $scanPaths) {
     if (-not (Test-Path $path)) { continue }
     if ((Get-Item $path).PSIsContainer) {
+        foreach ($dir in $forbiddenDirs) {
+            $bad = Join-Path $path $dir
+            if (Test-Path $bad) {
+                $failures += "$bad`: developer route directory must not exist in participant build"
+            }
+        }
         Get-ChildItem $path -Recurse -File | ForEach-Object {
             $content = Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue
             if (-not $content) { return }

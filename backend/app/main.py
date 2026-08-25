@@ -10,6 +10,7 @@ from app.api.routes import (
     admin,
     auth,
     conditionals,
+    developer,
     health,
     ipos,
     market,
@@ -71,8 +72,8 @@ def create_app() -> FastAPI:
             "models and news influence trader behaviour only."
         ),
         version="2.0.0",
-        docs_url="/docs",
-        redoc_url="/redoc",
+        docs_url="/docs" if settings.developer_mode else None,
+        redoc_url="/redoc" if settings.developer_mode else None,
         lifespan=lifespan,
     )
 
@@ -104,7 +105,9 @@ def create_app() -> FastAPI:
     app.include_router(market.router, prefix=prefix)
     if settings.local_instance_mode:
         app.include_router(simulation_local.router, prefix=prefix)
-    app.include_router(admin.router, prefix=prefix, dependencies=[Depends(require_admin)])
+    if settings.developer_mode:
+        app.include_router(developer.router, prefix=prefix)
+        app.include_router(admin.router, prefix=prefix, dependencies=[Depends(require_admin)])
     app.include_router(ws.router, prefix=prefix)
 
     if settings.serve_static_ui:

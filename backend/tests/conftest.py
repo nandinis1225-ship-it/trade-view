@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import app.models  # noqa: F401 — register metadata
 import pytest
 from fastapi.testclient import TestClient
@@ -42,6 +44,7 @@ def _make_memory_engine():
 
 @pytest.fixture()
 def db_session() -> Session:
+    os.environ["DEVELOPER_MODE"] = "true"
     get_settings.cache_clear()
     books.clear()
     engine = _make_memory_engine()
@@ -66,6 +69,7 @@ def db_session() -> Session:
 
 @pytest.fixture()
 def client() -> TestClient:
+    os.environ["DEVELOPER_MODE"] = "true"
     get_settings.cache_clear()
     books.clear()
     engine = _make_memory_engine()

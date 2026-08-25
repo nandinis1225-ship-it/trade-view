@@ -76,7 +76,7 @@ def bootstrap_universe(db: Session) -> dict:
         )
     timeline_created = seed_timeline_from_json(db)
     cfg = get_settings()
-    if settings.local_instance_mode and cfg.participant_event_mode:
+    if settings.local_instance_mode and (cfg.participant_event_mode or cfg.developer_mode):
         agents = ai_runner.seed_default_agents(db)
         ai_runner.sync_intensity_configs(db)
         liquidity = seed_all_liquidity(db)

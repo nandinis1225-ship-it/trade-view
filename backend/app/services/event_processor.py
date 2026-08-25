@@ -32,10 +32,10 @@ def _log(db: Session, *, elapsed: float, event_type: str, detail: dict) -> None:
     )
 
 
-def process_due_events(db: Session, elapsed_sec: float) -> list[dict]:
+def process_due_events(db: Session, elapsed_sec: float, *, force: bool = False) -> list[dict]:
     """Execute all pending timeline events with sim_offset_sec <= elapsed_sec."""
     state = get_or_create_state(db)
-    if state.status != SimulationStatus.RUNNING:
+    if not force and state.status != SimulationStatus.RUNNING:
         return []
 
     due = list(

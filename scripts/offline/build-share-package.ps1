@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$TimelineKey,
     [Parameter(Mandatory = $true)]
-    [string]$EventPin
+    [string]$EventPin,
+    [switch]$SkipRehearsal
 )
 
 $ErrorActionPreference = "Stop"
@@ -11,6 +12,15 @@ $Root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $OutDir = Join-Path $Root "dist-package"
 $ZipPath = Join-Path $Root "Tradeverse-Participant.zip"
 $FrontendDir = Join-Path $Root "frontend"
+
+if (-not $SkipRehearsal) {
+    $rehearsal = Join-Path $Root "scripts\dev\run-event-rehearsal.ps1"
+    if (Test-Path $rehearsal) {
+        Write-Host "Running developer rehearsal gate..."
+        & $rehearsal
+        if ($LASTEXITCODE -ne 0) { throw "developer rehearsal failed — use -SkipRehearsal to override" }
+    }
+}
 
 $excludeNames = @(
     ".git", "node_modules", "__pycache__", ".next", ".venv",
@@ -74,6 +84,16 @@ $env:PARTICIPANT_BUILD = "1"
 npm run build
 Pop-Location
 if ($LASTEXITCODE -ne 0) { throw "frontend build failed" }
+
+# Remove developer-only routes from participant static export
+$pruneDirs = @("admin", "market-screen", "developer")
+foreach ($dir in $pruneDirs) {
+    $target = Join-Path $FrontendDir "out\$dir"
+    if (Test-Path $target) {
+        Write-Host "Pruning participant build: frontend/out/$dir"
+        Remove-Item $target -Recurse -Force
+    }
+}
 
 Copy-Tree $Root $OutDir ""
 Copy-Item (Join-Path $Root "Start-TRADEVERSE.bat") (Join-Path $OutDir "Start-TRADEVERSE.bat") -ErrorAction SilentlyContinue

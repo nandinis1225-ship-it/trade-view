@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "NEXT_PUBLIC_DEVELOPER_MODE=true next dev",
+    "dev:participant-rehearsal": "NEXT_PUBLIC_DEVELOPER_MODE=true NEXT_PUBLIC_PARTICIPANT_EVENT_MODE=true next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"

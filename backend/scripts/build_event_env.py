@@ -11,6 +11,7 @@ DEFAULT_TEMPLATE = Path(__file__).resolve().parents[2] / ".env.offline-participa
 EVENT_ENV_LINES = """# TRADEVERSE participant event package — auto-generated, do not edit
 LOCAL_INSTANCE_MODE=true
 PARTICIPANT_EVENT_MODE=true
+DEVELOPER_MODE=false
 ENVIRONMENT=production
 DEBUG=false
 AUTO_INIT_DB=true

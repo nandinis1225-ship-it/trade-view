@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.developer_guard import require_ipo_admin
 from app.core.security import require_trader
 from app.models import Trader
 from app.realtime.ws_manager import manager
@@ -90,7 +91,7 @@ def trader_ipo_apps(
     return [_app_dict(a) for a in ipo_service.list_applications(db, trader_id=trader.id)]
 
 
-@router.post("/admin/ipos")
+@router.post("/admin/ipos", dependencies=[Depends(require_ipo_admin)])
 def admin_create_ipo(payload: IPOCreate, db: Session = Depends(get_db)) -> dict:
     try:
         ipo = ipo_service.create_ipo(db, **payload.model_dump())
@@ -99,7 +100,7 @@ def admin_create_ipo(payload: IPOCreate, db: Session = Depends(get_db)) -> dict:
     return _ipo_dict(ipo)
 
 
-@router.patch("/admin/ipos/{ipo_id}")
+@router.patch("/admin/ipos/{ipo_id}", dependencies=[Depends(require_ipo_admin)])
 def admin_update_ipo(ipo_id: int, payload: IPOCreate, db: Session = Depends(get_db)) -> dict:
     try:
         ipo = ipo_service.update_ipo(db, ipo_id, **payload.model_dump(exclude_unset=True))
@@ -108,7 +109,7 @@ def admin_update_ipo(ipo_id: int, payload: IPOCreate, db: Session = Depends(get_
     return _ipo_dict(ipo)
 
 
-@router.post("/admin/ipos/{ipo_id}/open")
+@router.post("/admin/ipos/{ipo_id}/open", dependencies=[Depends(require_ipo_admin)])
 def admin_open_ipo(ipo_id: int, db: Session = Depends(get_db)) -> dict:
     try:
         return _ipo_dict(ipo_service.open_ipo(db, ipo_id))
@@ -116,7 +117,7 @@ def admin_open_ipo(ipo_id: int, db: Session = Depends(get_db)) -> dict:
         raise HTTPException(400, str(e)) from e
 
 
-@router.post("/admin/ipos/{ipo_id}/close")
+@router.post("/admin/ipos/{ipo_id}/close", dependencies=[Depends(require_ipo_admin)])
 def admin_close_ipo(ipo_id: int, db: Session = Depends(get_db)) -> dict:
     try:
         return _ipo_dict(ipo_service.close_applications(db, ipo_id))
@@ -124,7 +125,7 @@ def admin_close_ipo(ipo_id: int, db: Session = Depends(get_db)) -> dict:
         raise HTTPException(400, str(e)) from e
 
 
-@router.post("/admin/ipos/{ipo_id}/allot")
+@router.post("/admin/ipos/{ipo_id}/allot", dependencies=[Depends(require_ipo_admin)])
 async def admin_allot_ipo(ipo_id: int, db: Session = Depends(get_db)) -> dict:
     try:
         result = ipo_service.allot_ipo(db, ipo_id)
@@ -137,7 +138,7 @@ async def admin_allot_ipo(ipo_id: int, db: Session = Depends(get_db)) -> dict:
     return result
 
 
-@router.post("/admin/ipos/{ipo_id}/list")
+@router.post("/admin/ipos/{ipo_id}/list", dependencies=[Depends(require_ipo_admin)])
 async def admin_list_ipo(ipo_id: int, db: Session = Depends(get_db)) -> dict:
     try:
         result = ipo_service.list_ipo(db, ipo_id)
@@ -148,6 +149,6 @@ async def admin_list_ipo(ipo_id: int, db: Session = Depends(get_db)) -> dict:
     return result
 
 
-@router.get("/admin/ipos/{ipo_id}/applications")
+@router.get("/admin/ipos/{ipo_id}/applications", dependencies=[Depends(require_ipo_admin)])
 def admin_ipo_apps(ipo_id: int, db: Session = Depends(get_db)) -> list[dict]:
     return [_app_dict(a) for a in ipo_service.list_applications(db, ipo_id=ipo_id)]

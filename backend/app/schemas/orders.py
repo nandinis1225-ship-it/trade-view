@@ -173,3 +173,5 @@ class SimulationSettingsUpdate(BaseModel):
     ipo_allocation_method: str | None = None
     max_ipo_lots_per_user: int | None = None
     news_combined_impact_cap_pct: float | None = None
+    sim_speed_multiplier: float | None = None
+    sim_duration_sec: float | None = None
