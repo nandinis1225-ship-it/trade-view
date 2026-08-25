@@ -23,6 +23,10 @@ from sqlalchemy.orm import sessionmaker
 
 @pytest.fixture()
 def event_client() -> TestClient:
+    os.environ["LOCAL_INSTANCE_MODE"] = "true"
+    os.environ["PARTICIPANT_EVENT_MODE"] = "true"
+    os.environ["EVENT_PIN"] = "1234"
+    os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
     get_settings.cache_clear()
     books.clear()
     engine = _make_memory_engine()

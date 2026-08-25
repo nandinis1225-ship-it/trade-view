@@ -28,7 +28,7 @@ def _require_stock_mutation_admin(
     return require_admin(request, credentials)
 
 
-def _to_stock_read(stock) -> StockRead:  # type: ignore[no-untyped-def]
+def _to_stock_read(stock, *, participant_mode: bool = False) -> StockRead:  # type: ignore[no-untyped-def]
     previous = Decimal(stock.previous_close)
     last = Decimal(stock.last_traded_price)
     pct = (
@@ -38,14 +38,15 @@ def _to_stock_read(stock) -> StockRead:  # type: ignore[no-untyped-def]
     )
     data = StockRead.model_validate(stock)
     sector = getattr(stock, "market_sector", None)
-    return data.model_copy(
-        update={
-            "percent_change": pct.quantize(Decimal("0.0001")),
-            "sector_id": stock.sector_id,
-            "sector_slug": sector.slug if sector else None,
-            "sector_name": sector.name if sector else None,
-        }
-    )
+    updates = {
+        "percent_change": pct.quantize(Decimal("0.0001")),
+        "sector_id": stock.sector_id,
+        "sector_slug": sector.slug if sector else None,
+        "sector_name": sector.name if sector else None,
+    }
+    if participant_mode:
+        updates["fair_value"] = last
+    return data.model_copy(update=updates)
 
 
 @router.post("", response_model=StockRead, status_code=status.HTTP_201_CREATED)
@@ -67,7 +68,11 @@ def list_stocks(
     sector_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> list[StockRead]:
-    return [_to_stock_read(s) for s in stock_service.list_stocks(db, sector_id=sector_id)]
+    participant_mode = get_settings().participant_event_mode
+    return [
+        _to_stock_read(s, participant_mode=participant_mode)
+        for s in stock_service.list_stocks(db, sector_id=sector_id)
+    ]
 
 
 @router.get("/{stock_id}", response_model=StockRead)
@@ -75,7 +80,7 @@ def get_stock(stock_id: int, db: Session = Depends(get_db)) -> StockRead:
     stock = stock_service.get_stock(db, stock_id)
     if stock is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="stock not found")
-    return _to_stock_read(stock)
+    return _to_stock_read(stock, participant_mode=get_settings().participant_event_mode)
 
 
 @router.post("/seed/defaults", status_code=status.HTTP_201_CREATED)

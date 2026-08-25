@@ -16,9 +16,49 @@ from app.core.database import Base, get_db
 from app.exchange.book_registry import books
 from app.main import create_app
 
+TEST_TIMELINE = {
+    "events": [
+        {
+            "checkpoint_id": 1,
+            "time": "00:01",
+            "type": "NEWS",
+            "phase": "PHASE 1",
+            "headline": "Test news",
+            "description": "desc",
+            "payload": {"sector_impacts": {"technology": 2.0}},
+        },
+        {
+            "checkpoint_id": 2,
+            "time": "03:00:00",
+            "type": "SIMULATION_END",
+            "phase": "COMPLETED",
+            "headline": "Event complete",
+            "description": "",
+            "payload": {},
+        },
+    ]
+}
 
-def join_participant(client: TestClient, display_name: str = "Tester") -> tuple[int, dict[str, str]]:
-    res = client.post("/api/v1/auth/join", json={"display_name": display_name})
+
+@pytest.fixture(autouse=True)
+def _patch_timeline_for_tests(monkeypatch):
+    """Use in-repo mini timeline when encrypted production timeline is unavailable."""
+    from app.services import timeline_service
+
+    monkeypatch.setattr(timeline_service, "load_timeline_json", lambda: TEST_TIMELINE)
+    monkeypatch.setattr(
+        "app.services.timeline_crypto.load_timeline_data",
+        lambda _key=None: TEST_TIMELINE,
+    )
+
+
+def join_participant(
+    client: TestClient, display_name: str = "Tester", session_id: str | None = None
+) -> tuple[int, dict[str, str]]:
+    payload: dict[str, str] = {"display_name": display_name}
+    if session_id is not None:
+        payload["session_id"] = session_id
+    res = client.post("/api/v1/auth/join", json=payload)
     assert res.status_code == 200, res.text
     data = res.json()
     headers = {"Authorization": f"Bearer {data['access_token']}"}
@@ -45,6 +85,7 @@ def _make_memory_engine():
 @pytest.fixture()
 def db_session() -> Session:
     os.environ["DEVELOPER_MODE"] = "true"
+    os.environ["PARTICIPANT_EVENT_MODE"] = "false"
     get_settings.cache_clear()
     books.clear()
     engine = _make_memory_engine()
@@ -70,6 +111,7 @@ def db_session() -> Session:
 @pytest.fixture()
 def client() -> TestClient:
     os.environ["DEVELOPER_MODE"] = "true"
+    os.environ["PARTICIPANT_EVENT_MODE"] = "false"
     get_settings.cache_clear()
     books.clear()
     engine = _make_memory_engine()
@@ -97,6 +139,68 @@ def client() -> TestClient:
         state.status = SimulationStatus.RUNNING
         db.commit()
         db.close()
+        yield test_client
+    app.dependency_overrides.clear()
+    Base.metadata.drop_all(bind=engine)
+    engine.dispose()
+    books.clear()
+    get_settings.cache_clear()
+
+
+@pytest.fixture()
+def event_client() -> TestClient:
+    os.environ["LOCAL_INSTANCE_MODE"] = "true"
+    os.environ["DEVELOPER_MODE"] = "false"
+    os.environ["PARTICIPANT_EVENT_MODE"] = "true"
+    os.environ["EVENT_PIN"] = "1234"
+    os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
+    get_settings.cache_clear()
+    books.clear()
+    engine = _make_memory_engine()
+    TestingSession = sessionmaker(bind=engine, autocommit=False, autoflush=False, future=True)
+    Base.metadata.create_all(bind=engine)
+    app = create_app()
+
+    def _override_db():
+        db = TestingSession()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = _override_db
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+    Base.metadata.drop_all(bind=engine)
+    engine.dispose()
+    books.clear()
+    get_settings.cache_clear()
+
+
+@pytest.fixture()
+def event_client() -> TestClient:
+    os.environ["LOCAL_INSTANCE_MODE"] = "true"
+    os.environ["DEVELOPER_MODE"] = "false"
+    os.environ["PARTICIPANT_EVENT_MODE"] = "true"
+    os.environ["EVENT_PIN"] = "1234"
+    os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
+    get_settings.cache_clear()
+    books.clear()
+    engine = _make_memory_engine()
+    TestingSession = sessionmaker(bind=engine, autocommit=False, autoflush=False, future=True)
+    Base.metadata.create_all(bind=engine)
+    app = create_app()
+
+    def _override_db():
+        db = TestingSession()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = _override_db
+    with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=engine)

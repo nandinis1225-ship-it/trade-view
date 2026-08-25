@@ -166,12 +166,26 @@ def start_simulation(db: Session) -> dict:
     if state.status == SimulationStatus.NOT_STARTED:
         state.sim_elapsed_sec = 0.0
         state.last_ai_tick_elapsed_sec = -30.0
+        state.anchor_sim_elapsed_sec = 0.0
+        state.last_processed_elapsed_sec = 0.0
+        now = datetime.now(timezone.utc)
+        state.event_start_real = now
+        state.clock_anchor_real = now
         from app.services.simulation_engine import reset_market_pulse_clock
 
         reset_market_pulse_clock(0.0)
+    elif state.status == SimulationStatus.PAUSED:
+        now = datetime.now(timezone.utc)
+        state.anchor_sim_elapsed_sec = float(state.sim_elapsed_sec)
+        state.event_start_real = now
+        state.clock_anchor_real = now
 
     state.status = SimulationStatus.RUNNING
-    state.clock_anchor_real = datetime.now(timezone.utc)
+    if state.event_start_real is None:
+        now = datetime.now(timezone.utc)
+        state.event_start_real = now
+        state.clock_anchor_real = now
+        state.anchor_sim_elapsed_sec = float(state.sim_elapsed_sec)
     state.paused_at_real = None
 
     session = db.scalar(select(MarketSession).order_by(MarketSession.id.desc()).limit(1))
@@ -249,6 +263,9 @@ def reset_simulation(db: Session) -> dict:
         state.sim_elapsed_sec = 0.0
         state.last_ai_tick_elapsed_sec = -30.0
         state.clock_anchor_real = None
+        state.event_start_real = None
+        state.anchor_sim_elapsed_sec = 0.0
+        state.last_processed_elapsed_sec = 0.0
         state.paused_at_real = None
 
         sim_settings = get_or_create_settings(db)

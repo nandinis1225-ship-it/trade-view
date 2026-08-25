@@ -26,6 +26,11 @@ class SimulationState(Base):
     clock_anchor_real: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    event_start_real: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    anchor_sim_elapsed_sec: Mapped[float] = mapped_column(Float, default=0.0)
+    last_processed_elapsed_sec: Mapped[float] = mapped_column(Float, default=0.0)
     paused_at_real: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

@@ -10,9 +10,21 @@ from typing import Any
 
 from fastapi import WebSocket
 
+from app.core.config import get_settings
+
 logger = logging.getLogger(__name__)
 
 PRIVATE_EVENTS = frozenset({"WALLET_UPDATED", "PORTFOLIO_UPDATED", "IPO_APPLICATION_UPDATED"})
+PARTICIPANT_FORBIDDEN_EVENTS = frozenset(
+    {
+        "AI_TICK",
+        "LEADERBOARD_UPDATE",
+        "MARKET_PULSE",
+        "STOP_LOSS_TRIGGERED",
+        "TAKE_PROFIT_TRIGGERED",
+        "CONDITIONAL_UPDATED",
+    }
+)
 
 
 @dataclass
@@ -64,6 +76,9 @@ class ConnectionManager:
 
     async def broadcast(self, event: str, payload: dict[str, Any]) -> None:
         """Route public events to all clients; private events to authenticated owner only."""
+        settings = get_settings()
+        if settings.participant_event_mode and event in PARTICIPANT_FORBIDDEN_EVENTS:
+            return
         trader_id = payload.get("trader_id")
         if event in PRIVATE_EVENTS or (event == "CONDITIONAL_UPDATED" and trader_id is not None):
             if trader_id is not None:

@@ -137,6 +137,12 @@ def target_impact_pct_for_stock(db: Session, event: NewsEvent, stock: Stock) -> 
     )
     if row is not None:
         return float(row.target_impact_pct)
+
+    if event.fundamental_impact_pct is not None and event.affected_tickers:
+        tickers = {t.strip().upper() for t in event.affected_tickers.split(",") if t.strip()}
+        if stock.ticker.upper() in tickers:
+            return float(event.fundamental_impact_pct) * float(event.direction)
+
     sector_pct = sector_impact_for_stock(event, stock)
     if sector_pct is None:
         return None

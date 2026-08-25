@@ -16,7 +16,6 @@ from app.models.simulation_event_log import SimulationEventLog
 from app.models.timeline_event import TimelineEvent
 from app.services import ipo_service, news_service
 from app.services.dissolution_service import DissolutionError, dissolve_company
-from app.services.news_impact_resolver import compute_stock_impacts_for_news
 from app.services.simulation_clock import get_or_create_state
 
 logger = logging.getLogger(__name__)
@@ -53,37 +52,57 @@ def process_due_events(db: Session, elapsed_sec: float, *, force: bool = False) 
     for event in due:
         if event.status == TimelineEventStatus.EXECUTED:
             continue
-        try:
-            payload = json.loads(event.payload_json or "{}")
-            outcome = _dispatch(db, event, payload, elapsed_sec)
-            event.status = TimelineEventStatus.EXECUTED
-            event.executed_at = datetime.now(timezone.utc)
-            _log(
-                db,
-                elapsed=elapsed_sec,
-                event_type=event.event_type.value,
-                detail={"checkpoint_id": event.checkpoint_id, "headline": event.headline, **outcome},
-            )
-            db.commit()
-            results.append(
-                {
-                    "checkpoint_id": event.checkpoint_id,
-                    "type": event.event_type.value,
-                    "headline": event.headline,
-                    **outcome,
-                }
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("EventProcessor failed checkpoint %s", event.checkpoint_id)
-            db.rollback()
-            _log(
-                db,
-                elapsed=elapsed_sec,
-                event_type="EVENT_FAILED",
-                detail={"checkpoint_id": event.checkpoint_id, "error": str(exc)},
-            )
-            db.commit()
+        outcome = process_single_timeline_event(db, event, elapsed_sec)
+        if outcome is not None:
+            results.append(outcome)
     return results
+
+
+def process_single_timeline_event(
+    db: Session, event: TimelineEvent, elapsed_sec: float
+) -> dict | None:
+    """Execute one timeline checkpoint exactly once."""
+    if event.status == TimelineEventStatus.EXECUTED:
+        return None
+    try:
+        payload = json.loads(event.payload_json or "{}")
+        outcome = _dispatch(db, event, payload, elapsed_sec)
+        event.status = TimelineEventStatus.EXECUTED
+        event.executed_at = datetime.now(timezone.utc)
+        _log(
+            db,
+            elapsed=elapsed_sec,
+            event_type=event.event_type.value,
+            detail={"checkpoint_id": event.checkpoint_id, "headline": event.headline, **outcome},
+        )
+        db.commit()
+        return {
+            "checkpoint_id": event.checkpoint_id,
+            "type": event.event_type.value,
+            "headline": event.headline,
+            **outcome,
+        }
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("EventProcessor failed checkpoint %s", event.checkpoint_id)
+        db.rollback()
+        _log(
+            db,
+            elapsed=elapsed_sec,
+            event_type="EVENT_FAILED",
+            detail={"checkpoint_id": event.checkpoint_id, "error": str(exc)},
+        )
+        db.commit()
+        return None
+
+
+def run_ai_tick_at(db: Session, elapsed_sec: float) -> list[dict]:
+    """Run one AI tick at the given simulation elapsed time."""
+    from app.ai import runner as ai_runner
+
+    state = get_or_create_state(db)
+    state.last_ai_tick_elapsed_sec = elapsed_sec
+    db.commit()
+    return ai_runner.run_all_agents(db)
 
 
 def _dispatch(db: Session, event: TimelineEvent, payload: dict, elapsed_sec: float) -> dict:
@@ -136,7 +155,6 @@ def _handle_news(db: Session, event: TimelineEvent, payload: dict) -> dict:
         brief_points_json=json.dumps(brief_points),
     )
     news_service.release_news(db, news.id)
-    compute_stock_impacts_for_news(db, news)
     detail = news_service.participant_news_dict(news)
     return {"news_id": news.id, "broadcast": detail}
 

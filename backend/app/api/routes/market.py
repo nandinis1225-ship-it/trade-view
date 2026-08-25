@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.schemas.orders import NewsPublicRead
 from app.services import leaderboard_service, news_service, sector_service
@@ -46,6 +47,8 @@ def news_detail(news_id: int, db: Session = Depends(get_db)) -> NewsPublicRead:
 
 @router.get("/leaderboard")
 def leaderboard(db: Session = Depends(get_db)) -> list[dict]:
+    if get_settings().participant_event_mode:
+        raise HTTPException(status_code=404, detail="leaderboard disabled in event mode")
     # Public: rank, name, return%, portfolio value — no private order details
     rows = leaderboard_service.compute_leaderboard(db)
     return [

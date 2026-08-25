@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import get_settings
-from app.models import NewsEvent, Stock
+from app.models import NewsEvent, NewsStockImpact, Stock
 from app.models.enums import Sector
 from app.services import sector_service
 from app.services.news_impact_resolver import snapshot_baselines_on_release
@@ -75,6 +75,9 @@ def release_news(db: Session, event_id: int, *, now: datetime | None = None) -> 
         raise ValueError("news not found")
     if event.status == "cancelled":
         raise ValueError("news was cancelled")
+    if event.is_released:
+        db.refresh(event)
+        return event
     now = now or datetime.now(timezone.utc)
     event.is_released = True
     event.released_at = now
@@ -84,25 +87,29 @@ def release_news(db: Session, event_id: int, *, now: datetime | None = None) -> 
 
     compute_stock_impacts_for_news(db, event)
 
-    # Optional fair-value nudge from targets (does NOT set LTP)
     stocks = list(
         db.scalars(select(Stock).options(joinedload(Stock.market_sector))).all()
     )
     from app.services.news_impact_resolver import target_impact_pct_for_stock
 
-    settings = get_settings()
     for stock in stocks:
+        row = db.scalar(
+            select(NewsStockImpact).where(
+                NewsStockImpact.news_event_id == event.id,
+                NewsStockImpact.stock_id == stock.id,
+            )
+        )
+        if row is not None and row.target_price is not None:
+            stock.fair_value = Decimal(row.target_price).quantize(Decimal("0.0001"))
+            continue
+
         pct = target_impact_pct_for_stock(db, event, stock)
         if pct is None:
             continue
-        # Soft fair-value shift toward target (AI trades move LTP)
-        factor = Decimal("1") + (
-            Decimal(str(pct))
-            * Decimal(str(settings.news_fundamental_multiplier))
-            / Decimal("100")
-            * Decimal("0.35")
+        ref = Decimal(stock.last_traded_price or stock.starting_price)
+        stock.fair_value = (ref * (Decimal("1") + Decimal(str(pct)) / Decimal("100"))).quantize(
+            Decimal("0.0001")
         )
-        stock.fair_value = (stock.fair_value * factor).quantize(Decimal("0.0001"))
 
     db.commit()
     db.refresh(event)

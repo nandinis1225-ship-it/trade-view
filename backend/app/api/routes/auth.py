@@ -17,6 +17,7 @@ from app.models import Trader
 from app.models.enums import TraderType
 from app.schemas import TraderCreate
 from app.services import trader_service
+from app.services.pin_service import verify_event_pin
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -62,9 +63,77 @@ def join_session(
 
     if settings.local_instance_mode:
         session_id = (payload.session_id or "").strip() or str(uuid.uuid4())
+        requested_name = payload.display_name.strip()
         existing = db.scalar(select(Trader).where(Trader.session_id == session_id))
         if existing is not None:
+            if settings.participant_event_mode and existing.identity_locked and existing.name != requested_name:
+                raise HTTPException(
+                    status_code=403,
+                    detail="participant identity is locked — name cannot be changed",
+                )
             trader = existing
+            display_name = existing.name
+        elif settings.participant_event_mode:
+            locked_human = db.scalar(
+                select(Trader).where(
+                    Trader.trader_type == TraderType.HUMAN,
+                    Trader.identity_locked.is_(True),
+                )
+            )
+            if locked_human is not None:
+                if locked_human.session_id and locked_human.session_id != session_id:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="a participant identity already exists on this machine",
+                    )
+                trader = locked_human
+                if trader.name != requested_name:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="participant identity is locked — name cannot be changed",
+                    )
+                trader.session_id = session_id
+                db.commit()
+                db.refresh(trader)
+                display_name = trader.name
+            else:
+                humans = list(
+                    db.scalars(
+                        select(Trader).where(Trader.trader_type == TraderType.HUMAN)
+                    ).all()
+                )
+                if humans and humans[0].identity_locked:
+                    trader = humans[0]
+                    if trader.name != requested_name:
+                        raise HTTPException(
+                            status_code=403,
+                            detail="participant identity is locked — name cannot be changed",
+                        )
+                    trader.session_id = session_id
+                    db.commit()
+                    db.refresh(trader)
+                    display_name = trader.name
+                elif humans and not humans[0].identity_locked and humans[0].session_id is None:
+                    trader = humans[0]
+                    trader.session_id = session_id
+                    trader.name = requested_name
+                    trader.identity_locked = True
+                    db.commit()
+                    db.refresh(trader)
+                    display_name = trader.name
+                else:
+                    trader = trader_service.create_trader(
+                        db,
+                        TraderCreate(
+                            name=requested_name,
+                            trader_type=TraderType.HUMAN,
+                            session_id=session_id,
+                        ),
+                    )
+                    trader.identity_locked = True
+                    db.commit()
+                    db.refresh(trader)
+                    display_name = trader.name
         else:
             humans = list(
                 db.scalars(
@@ -74,19 +143,19 @@ def join_session(
             if humans:
                 trader = humans[0]
                 trader.session_id = session_id
-                trader.name = payload.display_name.strip()
+                trader.name = requested_name
                 db.commit()
                 db.refresh(trader)
             else:
                 trader = trader_service.create_trader(
                     db,
                     TraderCreate(
-                        name=payload.display_name.strip(),
+                        name=requested_name,
                         trader_type=TraderType.HUMAN,
                         session_id=session_id,
                     ),
                 )
-        display_name = payload.display_name.strip()
+            display_name = requested_name
     else:
         suffix = secrets.token_hex(3)
         trader = trader_service.create_trader(
@@ -119,10 +188,9 @@ def validate_event_pin(
     settings = get_settings()
     if not settings.participant_event_mode:
         return PinValidateResponse(ok=True)
-    expected = (settings.event_pin or "").strip()
-    if not expected:
+    if not (settings.event_pin_hash or settings.event_pin):
         raise HTTPException(status_code=503, detail="event pin not configured")
-    if payload.pin.strip() != expected:
+    if not verify_event_pin(payload.pin):
         raise HTTPException(status_code=403, detail="invalid event pin")
     return PinValidateResponse(ok=True)
 

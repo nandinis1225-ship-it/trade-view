@@ -5,6 +5,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.security import require_trader
 from app.models import Trader
@@ -15,6 +16,15 @@ from app.services import conditional_order_service
 from app.services.conditional_order_service import ConditionalOrderError
 
 router = APIRouter(tags=["conditionals"])
+
+
+def _require_conditionals_enabled() -> None:
+    if get_settings().participant_event_mode:
+        raise HTTPException(status_code=404, detail="conditional orders disabled in event mode")
+
+
+def _conditionals_allowed() -> bool:
+    return not get_settings().participant_event_mode
 
 
 def _row_dict(row) -> dict:
@@ -39,6 +49,7 @@ async def create_conditional(
     db: Session = Depends(get_db),
     trader: Trader = Depends(require_trader),
 ) -> dict:
+    _require_conditionals_enabled()
     if payload.trader_id != trader.id:
         raise HTTPException(403, "trader_id does not match authenticated session")
     try:
@@ -68,6 +79,7 @@ def list_conditionals(
     db: Session = Depends(get_db),
     trader: Trader = Depends(require_trader),
 ) -> list[dict]:
+    _require_conditionals_enabled()
     if trader_id != trader.id:
         raise HTTPException(403, "trader_id does not match authenticated session")
     rows = conditional_order_service.list_conditionals(
@@ -84,6 +96,7 @@ async def modify_conditional(
     db: Session = Depends(get_db),
     trader: Trader = Depends(require_trader),
 ) -> dict:
+    _require_conditionals_enabled()
     if trader_id != trader.id:
         raise HTTPException(403, "trader_id does not match authenticated session")
     try:
@@ -108,6 +121,7 @@ async def cancel_conditional(
     db: Session = Depends(get_db),
     trader: Trader = Depends(require_trader),
 ) -> dict:
+    _require_conditionals_enabled()
     if trader_id != trader.id:
         raise HTTPException(403, "trader_id does not match authenticated session")
     try:

@@ -6,7 +6,10 @@ import argparse
 import sys
 from pathlib import Path
 
-DEFAULT_TEMPLATE = Path(__file__).resolve().parents[2] / ".env.offline-participant.example"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from app.services.pin_service import generate_pin_verifier
+from app.services.timeline_crypto import bake_timeline_for_participant
 
 EVENT_ENV_LINES = """# TRADEVERSE participant event package — auto-generated, do not edit
 LOCAL_INSTANCE_MODE=true
@@ -15,6 +18,7 @@ DEVELOPER_MODE=false
 ENVIRONMENT=production
 DEBUG=false
 AUTO_INIT_DB=true
+TIMELINE_EMBEDDED=true
 
 BACKEND_HOST=127.0.0.1
 BACKEND_PORT=8765
@@ -36,8 +40,8 @@ NEXT_PUBLIC_API_URL=http://127.0.0.1:8765
 NEXT_PUBLIC_WS_URL=ws://127.0.0.1:8765
 NEXT_PUBLIC_API_PREFIX=/api/v1
 
-TIMELINE_DECRYPT_KEY={timeline_key}
-EVENT_PIN={event_pin}
+EVENT_PIN_SALT={pin_salt}
+EVENT_PIN_HASH={pin_hash}
 """
 
 
@@ -46,15 +50,25 @@ def main() -> int:
     parser.add_argument("--timeline-key", required=True)
     parser.add_argument("--event-pin", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--bake-timeline",
+        type=Path,
+        default=None,
+        help="Optional path to write baked timeline JSON for participant runtime",
+    )
     args = parser.parse_args()
 
-    content = EVENT_ENV_LINES.format(
-        timeline_key=args.timeline_key.strip(),
-        event_pin=args.event_pin.strip(),
-    )
+    pin_salt, pin_hash = generate_pin_verifier(args.event_pin.strip())
+    bake_dest = args.bake_timeline
+    if bake_dest is None:
+        bake_dest = Path(__file__).resolve().parents[1] / "app" / "seed" / "tradeverse_timeline.baked.json"
+    bake_timeline_for_participant(args.timeline_key.strip(), dest=bake_dest)
+
+    content = EVENT_ENV_LINES.format(pin_salt=pin_salt, pin_hash=pin_hash)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(content, encoding="utf-8")
     print(f"Wrote event .env to {args.output}")
+    print(f"Baked timeline to {bake_dest}")
     return 0
 
 

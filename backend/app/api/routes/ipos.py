@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.developer_guard import require_ipo_admin
 from app.core.security import require_trader
@@ -49,14 +50,34 @@ def _app_dict(app) -> dict:
     }
 
 
+def _participant_ipo_dict(ipo) -> dict:
+    return {
+        "id": ipo.id,
+        "company_name": ipo.company_name,
+        "ticker": ipo.ticker,
+        "issue_price": str(ipo.issue_price),
+        "lot_size": ipo.lot_size,
+        "maximum_lots_per_user": ipo.maximum_lots_per_user,
+        "status": ipo.status.value,
+    }
+
+
 @router.get("/ipos")
 def list_ipos(db: Session = Depends(get_db)) -> list[dict]:
-    return [_ipo_dict(i) for i in ipo_service.list_ipos(db)]
+    settings = get_settings()
+    rows = ipo_service.list_ipos(db)
+    if settings.participant_event_mode:
+        visible = [i for i in rows if i.status.value in {"open", "listed"}]
+        return [_participant_ipo_dict(i) for i in visible]
+    return [_ipo_dict(i) for i in rows]
 
 
 @router.get("/ipos/open")
 def list_open_ipos(db: Session = Depends(get_db)) -> list[dict]:
-    return [_ipo_dict(i) for i in ipo_service.list_ipos(db) if i.status.value == "open"]
+    rows = [i for i in ipo_service.list_ipos(db) if i.status.value == "open"]
+    if get_settings().participant_event_mode:
+        return [_participant_ipo_dict(i) for i in rows]
+    return [_ipo_dict(i) for i in rows]
 
 
 @router.post("/ipos/{ipo_id}/apply")

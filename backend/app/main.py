@@ -44,19 +44,27 @@ async def lifespan(_app: FastAPI):
         ):
             init_db()
             logger.info("Schema initialized")
+            from app.core.database import SessionLocal
+            from app.services.recovery_service import reconcile_on_startup
+
+            with SessionLocal() as db:
+                reconcile_on_startup(db)
     else:
         logger.error("Database connection failed at startup")
 
     from app.services import simulation_engine
-    from app.services.leaderboard_sync_service import start_leaderboard_sync
 
     simulation_engine.start_engine()
-    start_leaderboard_sync()
+    if not settings.participant_event_mode:
+        from app.services.leaderboard_sync_service import start_leaderboard_sync
+
+        start_leaderboard_sync()
     logger.info("SIMULATION WORKER START requested")
     yield
-    from app.services.leaderboard_sync_service import stop_leaderboard_sync
+    if not settings.participant_event_mode:
+        from app.services.leaderboard_sync_service import stop_leaderboard_sync
 
-    stop_leaderboard_sync()
+        stop_leaderboard_sync()
     simulation_engine.stop_engine()
     logger.info("Server shutdown complete")
 

@@ -135,6 +135,8 @@ def close_applications(db: Session, ipo_id: int) -> IPO:
     ipo = db.get(IPO, ipo_id)
     if ipo is None:
         raise IPOServiceError("ipo not found")
+    if ipo.status == IPOStatus.CLOSED:
+        return ipo
     if ipo.status != IPOStatus.OPEN:
         raise IPOServiceError("IPO must be open to close applications")
     ipo.status = IPOStatus.CLOSED
@@ -151,6 +153,8 @@ def allot_ipo(db: Session, ipo_id: int, *, seed: int | None = None) -> dict:
     ipo = db.get(IPO, ipo_id)
     if ipo is None:
         raise IPOServiceError("ipo not found")
+    if ipo.status == IPOStatus.ALLOTTED:
+        return {"ipo_id": ipo.id, "allocations": [], "already_allotted": True}
     if ipo.status not in {IPOStatus.CLOSED, IPOStatus.OPEN}:
         raise IPOServiceError("IPO must be closed (or open) before allotment")
     if ipo.status == IPOStatus.OPEN:
@@ -233,6 +237,8 @@ def allot_ipo_personal(db: Session, ipo_id: int) -> dict:
     ipo = db.get(IPO, ipo_id)
     if ipo is None:
         raise IPOServiceError("ipo not found")
+    if ipo.status == IPOStatus.ALLOTTED:
+        return {"ipo_id": ipo.id, "allocations": [], "already_allotted": True, "allotment_mode": "personal"}
     if ipo.status not in {IPOStatus.CLOSED, IPOStatus.OPEN}:
         raise IPOServiceError("IPO must be closed (or open) before allotment")
     if ipo.status == IPOStatus.OPEN:
@@ -298,10 +304,27 @@ def list_ipo(db: Session, ipo_id: int) -> dict:
     ipo = db.get(IPO, ipo_id)
     if ipo is None:
         raise IPOServiceError("ipo not found")
+    if ipo.status == IPOStatus.LISTED and ipo.stock_id:
+        stock = stock_service.get_stock(db, ipo.stock_id)
+        return {
+            "ipo_id": ipo.id,
+            "stock_id": ipo.stock_id,
+            "ticker": stock.ticker if stock else ipo.ticker,
+            "already_listed": True,
+        }
     if ipo.status != IPOStatus.ALLOTTED:
         raise IPOServiceError("IPO must be allotted before listing")
-    if stock_service.get_stock_by_ticker(db, ipo.ticker):
-        raise IPOServiceError("stock already exists")
+    existing_stock = stock_service.get_stock_by_ticker(db, ipo.ticker)
+    if existing_stock is not None:
+        ipo.stock_id = existing_stock.id
+        ipo.status = IPOStatus.LISTED
+        db.commit()
+        return {
+            "ipo_id": ipo.id,
+            "stock_id": existing_stock.id,
+            "ticker": existing_stock.ticker,
+            "already_listed": True,
+        }
 
     sector_service.ensure_sectors(db)
     sector_enum = Sector.TECH

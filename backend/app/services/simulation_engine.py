@@ -238,6 +238,7 @@ async def _loop() -> None:
                     if (
                         not completed
                         and state.status == SimulationStatus.RUNNING
+                        and not get_settings().participant_event_mode
                         and now_real - _last_market_pulse_real >= pulse_interval
                     ):
                         _last_market_pulse_real = now_real

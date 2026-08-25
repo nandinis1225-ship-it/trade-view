@@ -105,6 +105,21 @@ def _ensure_sqlite_columns(bind: Engine) -> None:
             )
         if trader_cols and "session_id" not in trader_cols:
             conn.execute(text("ALTER TABLE traders ADD COLUMN session_id VARCHAR(64)"))
+        if trader_cols and "identity_locked" not in trader_cols:
+            conn.execute(
+                text("ALTER TABLE traders ADD COLUMN identity_locked BOOLEAN DEFAULT 0")
+            )
+
+        sim_cols = _cols("simulation_state")
+        sim_alters = [
+            ("event_start_real", "DATETIME"),
+            ("anchor_sim_elapsed_sec", "FLOAT DEFAULT 0"),
+            ("last_processed_elapsed_sec", "FLOAT DEFAULT 0"),
+        ]
+        if sim_cols:
+            for name, decl in sim_alters:
+                if name not in sim_cols:
+                    conn.execute(text(f"ALTER TABLE simulation_state ADD COLUMN {name} {decl}"))
 
         news_cols = _cols("news_events")
         alters = [

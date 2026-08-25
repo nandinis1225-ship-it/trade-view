@@ -14,6 +14,7 @@ from app.core.security import require_trader
 from app.models import NewsEvent, Trade, Trader
 from app.services import ipo_service, leaderboard_service, portfolio_service, sector_service, stock_service
 from app.services import news_service
+from app.services.recovery_service import reconcile_on_startup
 from app.services.simulation_clock import participant_status_dict
 
 router = APIRouter(prefix="/session", tags=["session"])
@@ -46,6 +47,7 @@ def session_bootstrap(
     trader: Trader = Depends(require_trader),
 ) -> dict:
     """Authoritative snapshot for terminal load / WS reconnect."""
+    reconcile_on_startup(db)
     wallet = portfolio_service.get_wallet(db, trader.id).model_dump()
     portfolio = portfolio_service.get_portfolio(db, trader.id).model_dump()
     released_news = db.scalar(

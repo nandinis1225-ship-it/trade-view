@@ -104,7 +104,8 @@ if (Test-Path (Join-Path $Root "PARTICIPANT-README.md")) {
 
 $envScript = Join-Path $Root "backend\scripts\build_event_env.py"
 $envOut = Join-Path $OutDir ".env"
-python $envScript --timeline-key $TimelineKey --event-pin $EventPin --output $envOut
+$bakedTimeline = Join-Path $Root "backend\app\seed\tradeverse_timeline.baked.json"
+python $envScript --timeline-key $TimelineKey --event-pin $EventPin --output $envOut --bake-timeline $bakedTimeline
 if ($LASTEXITCODE -ne 0) { throw "build_event_env.py failed" }
 
 $runtimeOut = Join-Path $OutDir "frontend\public\tradeverse-runtime.json"
@@ -136,5 +137,11 @@ Compress-Archive -Path (Join-Path $OutDir "*") -DestinationPath $ZipPath -Force
 Write-Host "Created: $ZipPath"
 Write-Host ""
 Write-Host "Send participants: Tradeverse-Participant.zip"
-Write-Host "Announce EVENT_PIN verbally at event start (also baked into each package)."
-Write-Host "Requires on each laptop: Python 3.11-3.13 (Node only needed for organizer rebuilds)."
+Write-Host "Announce EVENT_PIN verbally at event start (hash baked into each package)."
+Write-Host "For self-contained exe use: scripts\offline\Build-Participant.ps1"
+
+$audit = Join-Path $PSScriptRoot "audit-participant-build.ps1"
+if (Test-Path $audit) {
+    & $audit $OutDir
+    if ($LASTEXITCODE -ne 0) { throw "participant build audit failed" }
+}

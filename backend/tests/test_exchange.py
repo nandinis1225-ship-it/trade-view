@@ -317,6 +317,9 @@ def test_news_release_is_idempotent(db_session):
 
     seed_default_stocks(db_session)
     stock = db_session.query(Stock).filter_by(ticker="TECHNOVA").one()
+    stock.last_traded_price = Decimal("100")
+    stock.fair_value = Decimal("100")
+    db_session.commit()
     before = stock.fair_value
 
     event = create_news(
