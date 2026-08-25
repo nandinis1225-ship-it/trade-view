@@ -1,4 +1,4 @@
-# Builds browser-based TRADEVERSE participant package (Windows — no Tauri)
+# Builds browser-based TRADEVERSE participant package (Windows - no Tauri)
 param(
     [Parameter(Mandatory = $true)]
     [string]$EventPin,
@@ -24,7 +24,7 @@ if (-not $SkipRehearsal) {
     if (Test-Path $rehearsal) {
         Write-Host "Running developer rehearsal gate..."
         & $rehearsal
-        if ($LASTEXITCODE -ne 0) { throw "developer rehearsal failed — use -SkipRehearsal to override" }
+        if ($LASTEXITCODE -ne 0) { throw "developer rehearsal failed - use -SkipRehearsal to override" }
     }
 }
 
@@ -54,7 +54,7 @@ if (-not $SkipPyInstaller) {
 
 $sidecar = Join-Path $BackendDir "dist\tradeverse-backend.exe"
 if (-not (Test-Path $sidecar)) {
-    throw "tradeverse-backend.exe not found — build PyInstaller sidecar on Windows"
+    throw "tradeverse-backend.exe not found - build PyInstaller sidecar on Windows"
 }
 
 if (Test-Path $OutDir) { Remove-Item $OutDir -Recurse -Force }
