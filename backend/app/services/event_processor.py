@@ -137,7 +137,7 @@ def _handle_news(db: Session, event: TimelineEvent, payload: dict) -> dict:
     )
     news_service.release_news(db, news.id)
     compute_stock_impacts_for_news(db, news)
-    detail = news_service.news_detail_dict(news)
+    detail = news_service.participant_news_dict(news)
     return {"news_id": news.id, "broadcast": detail}
 
 

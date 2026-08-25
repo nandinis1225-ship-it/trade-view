@@ -30,4 +30,6 @@
 
 ## What is not in this package
 
-The organizer does **not** ship future news spoilers (no timeline JSON or brief documents). News appears only as it is released in the simulation.
+The organizer does **not** ship future news spoilers (no plaintext timeline JSON, no phase schedule, no IPO/dissolution timing in the universe file). News appears only as it is released in the simulation.
+
+The encrypted timeline seed (`tradeverse_timeline.enc`) is required for the local engine to run; it is not exposed through the participant UI or public APIs.

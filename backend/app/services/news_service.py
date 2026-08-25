@@ -157,6 +157,17 @@ def get_news(db: Session, news_id: int) -> NewsEvent | None:
     return db.get(NewsEvent, news_id)
 
 
+def participant_news_dict(event: NewsEvent) -> dict:
+    """Participant-safe news — headline and body only, no simulation metadata."""
+    return {
+        "id": event.id,
+        "title": event.title,
+        "description": event.description,
+        "released_at": event.released_at.isoformat() if event.released_at else None,
+        "brief_points": _brief_points_for_event(event),
+    }
+
+
 def news_detail_dict(event: NewsEvent) -> dict:
     try:
         sector_impacts = json.loads(event.sector_impacts_json or "{}")

@@ -76,6 +76,16 @@ class NewsCreate(BaseModel):
     status: str | None = None
 
 
+class NewsPublicRead(BaseModel):
+    """Participant-facing news — no simulation metadata."""
+
+    id: int
+    title: str
+    description: str
+    released_at: datetime | None = None
+    brief_points: list[str] | None = None
+
+
 class NewsRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

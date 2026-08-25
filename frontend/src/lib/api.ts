@@ -583,6 +583,33 @@ export async function organizerBuildParticipantZip(
   });
 }
 
+export type OrganizerMarketDashboard = {
+  elapsed: string;
+  current_phase: string;
+  status: string;
+  market_change_pct: string;
+  latest_news: {
+    id: number;
+    title: string;
+    description: string;
+    released_at: string | null;
+    sector_impacts: Record<string, number>;
+  } | null;
+  news: Array<{
+    id: number;
+    title: string;
+    description: string;
+    released_at: string | null;
+    sector_impacts: Record<string, number>;
+  }>;
+};
+
+export async function organizerMarketDashboard(
+  passkey: string,
+): Promise<OrganizerMarketDashboard> {
+  return apiPost<OrganizerMarketDashboard>("/simulation/organizer/market-dashboard", { passkey });
+}
+
 export async function organizerStopMarket(passkey: string): Promise<OrganizerResetResult> {
   return apiPost<OrganizerResetResult>("/simulation/organizer/stop", { passkey });
 }

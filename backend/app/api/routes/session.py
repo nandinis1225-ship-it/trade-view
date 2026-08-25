@@ -13,7 +13,7 @@ from app.core.security import require_trader
 from app.models import NewsEvent, Trader
 from app.services import ipo_service, leaderboard_service, portfolio_service, sector_service, stock_service
 from app.services import news_service
-from app.services.simulation_clock import status_dict
+from app.services.simulation_clock import participant_status_dict
 
 router = APIRouter(prefix="/session", tags=["session"])
 
@@ -52,16 +52,7 @@ def session_bootstrap(
     ) or 0
     news_rows = []
     for event in news_service.list_news(db, released_only=True)[:20]:
-        detail = news_service.news_detail_dict(event)
-        news_rows.append(
-            {
-                "id": detail["id"],
-                "title": detail["title"],
-                "description": detail.get("description"),
-                "released_at": detail.get("released_at"),
-                "brief_points": detail.get("brief_points") or [],
-            }
-        )
+        news_rows.append(news_service.participant_news_dict(event))
     leaderboard_rows = [
         {
             "rank": r["rank"],
@@ -87,7 +78,7 @@ def session_bootstrap(
         for a in ipo_service.list_applications(db, trader_id=trader.id)
     ]
     return {
-        "simulation": status_dict(db),
+        "simulation": participant_status_dict(db),
         "wallet": wallet,
         "portfolio": portfolio,
         "stocks": [

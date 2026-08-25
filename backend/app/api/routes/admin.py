@@ -19,6 +19,7 @@ from app.schemas import SectorAssign
 from app.services import news_service, order_service, sector_service, stock_service
 from app.services.liquidity_service import seed_all_liquidity
 from app.services.news_service import effective_impact
+from app.services.simulation_clock import participant_sim_control_response
 from app.services.sector_service import SectorServiceError
 from app.api.routes.stocks import _to_stock_read
 
@@ -33,7 +34,7 @@ async def simulation_start(db: Session = Depends(get_db)) -> dict:
         result = start_simulation(db)
     except SimulationControlError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    await manager.broadcast("SIMULATION_STATUS", result)
+    await manager.broadcast("SIMULATION_STATUS", participant_sim_control_response(db, result))
     return result
 
 
@@ -45,7 +46,7 @@ async def simulation_stop(db: Session = Depends(get_db)) -> dict:
         result = stop_simulation(db)
     except SimulationControlError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    await manager.broadcast("SIMULATION_STATUS", result)
+    await manager.broadcast("SIMULATION_STATUS", participant_sim_control_response(db, result))
     return result
 
 
@@ -57,7 +58,7 @@ async def simulation_reset(db: Session = Depends(get_db)) -> dict:
         result = reset_simulation(db)
     except SimulationControlError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    await manager.broadcast("SIMULATION_STATUS", result)
+    await manager.broadcast("SIMULATION_STATUS", participant_sim_control_response(db, result))
     return result
 
 
@@ -180,7 +181,7 @@ async def release_news(event_id: int, db: Session = Depends(get_db)) -> NewsRead
         event = news_service.release_news(db, event_id)
     except ValueError as exc:
         raise HTTPException(404, str(exc)) from exc
-    detail = news_service.news_detail_dict(event)
+    detail = news_service.participant_news_dict(event)
     read = NewsRead.model_validate(event)
     read = read.model_copy(update={"effective_impact": effective_impact(event)})
     await manager.broadcast("NEWS_RELEASED", detail)

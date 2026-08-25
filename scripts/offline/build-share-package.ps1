@@ -67,6 +67,17 @@ if (Test-Path (Join-Path $Root "PARTICIPANT-README.md")) {
     Copy-Item (Join-Path $Root "PARTICIPANT-README.md") (Join-Path $OutDir "PARTICIPANT-README.md")
 }
 
+# Replace universe with participant-safe copy (no phase/IPO/dissolution schedule spoilers)
+$sanitizeScript = Join-Path $Root "backend\scripts\sanitize_universe_for_participants.py"
+$universeOut = Join-Path $OutDir "backend\app\seed\tradeverse_universe.json"
+if (Test-Path $sanitizeScript) {
+    Write-Host "Sanitizing tradeverse_universe.json for participant package..."
+    python $sanitizeScript --output $universeOut
+    if ($LASTEXITCODE -ne 0) {
+        throw "sanitize_universe_for_participants.py failed"
+    }
+}
+
 if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
 Compress-Archive -Path (Join-Path $OutDir "*") -DestinationPath $ZipPath -Force
 

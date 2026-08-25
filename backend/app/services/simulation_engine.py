@@ -16,7 +16,7 @@ from app.models.enums import SimulationStatus
 from app.realtime.ws_manager import manager
 from app.services.event_processor import process_due_events
 from app.services.market_pulse_service import run_market_pulse
-from app.services.simulation_clock import advance_clock, get_or_create_state, status_dict
+from app.services.simulation_clock import advance_clock, get_or_create_state, participant_status_dict
 from app.services.simulation_settings_service import get_or_create_settings
 
 logger = logging.getLogger(__name__)
@@ -218,7 +218,7 @@ async def _loop() -> None:
                             logger.info("DISSOLUTION EVENT: %s", er)
                             pending_broadcasts.append(("COMPANY_DISSOLVED", er))
                         elif etype == "SIMULATION_END":
-                            pending_broadcasts.append(("SIMULATION_STATUS", status_dict(db)))
+                            pending_broadcasts.append(("SIMULATION_STATUS", participant_status_dict(db)))
 
                     settings = get_or_create_settings(db)
                     state = get_or_create_state(db)
@@ -232,12 +232,12 @@ async def _loop() -> None:
                         session_pause(db)
                         db.commit()
                         logger.info("Simulation completed at sim=%.0fs", elapsed)
-                        pending_broadcasts.append(("SIMULATION_STATUS", status_dict(db)))
+                        pending_broadcasts.append(("SIMULATION_STATUS", participant_status_dict(db)))
                         completed = True
 
                     if not completed and elapsed - _last_clock_broadcast >= CLOCK_BROADCAST_INTERVAL:
                         _last_clock_broadcast = elapsed
-                        pending_broadcasts.append(("SIMULATION_CLOCK", status_dict(db)))
+                        pending_broadcasts.append(("SIMULATION_CLOCK", participant_status_dict(db)))
 
                     if (
                         not completed

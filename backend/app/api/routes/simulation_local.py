@@ -25,7 +25,8 @@ from app.services.simulation_controller import (
     start_simulation,
     stop_simulation,
 )
-from app.services.simulation_clock import status_dict
+from app.services import news_service, sector_service
+from app.services.simulation_clock import participant_sim_control_response, participant_status_dict, status_dict
 
 router = APIRouter(prefix="/simulation", tags=["simulation"])
 
@@ -50,10 +51,15 @@ def _require_organizer_passkey(body: OrganizerResetBody) -> None:
         raise HTTPException(status_code=403, detail="invalid organizer passkey")
 
 
+def _participant_sim_response(db: Session, result: dict) -> dict:
+    """Strip internal simulation metadata from control responses."""
+    return participant_sim_control_response(db, result)
+
+
 @router.get("/status")
 def simulation_status(db: Session = Depends(get_db)) -> dict:
     _require_local_mode()
-    return status_dict(db)
+    return participant_status_dict(db)
 
 
 @router.post("/bootstrap")
@@ -66,7 +72,7 @@ def simulation_bootstrap(db: Session = Depends(get_db)) -> dict:
 def simulation_start(db: Session = Depends(get_db)) -> dict:
     _require_local_mode()
     try:
-        return start_simulation(db)
+        return _participant_sim_response(db, start_simulation(db))
     except SimulationControlError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -75,7 +81,7 @@ def simulation_start(db: Session = Depends(get_db)) -> dict:
 def simulation_stop(db: Session = Depends(get_db)) -> dict:
     _require_local_mode()
     try:
-        return stop_simulation(db)
+        return _participant_sim_response(db, stop_simulation(db))
     except SimulationControlError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -84,7 +90,7 @@ def simulation_stop(db: Session = Depends(get_db)) -> dict:
 def simulation_reset(db: Session = Depends(get_db)) -> dict:
     _require_local_mode()
     try:
-        return reset_simulation(db)
+        return _participant_sim_response(db, reset_simulation(db))
     except SimulationControlError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -164,6 +170,51 @@ async def organizer_build_participant_zip(
         return build_participant_zip()
     except ParticipantPackageError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/organizer/market-dashboard")
+async def organizer_market_dashboard(
+    body: OrganizerResetBody,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Organizer-only: full market view with phase and sector impacts for projector."""
+    _require_local_mode()
+    _require_organizer_client(request)
+    _require_organizer_passkey(body)
+    clock = status_dict(db)
+    change = sector_service.market_change_pct(db)
+    events = news_service.list_news(db, released_only=True)
+    latest = None
+    if events:
+        detail = news_service.news_detail_dict(events[0])
+        latest = {
+            "id": detail["id"],
+            "title": detail["title"],
+            "description": detail["description"],
+            "released_at": detail["released_at"],
+            "sector_impacts": detail["sector_impacts"],
+        }
+    news_items = []
+    for event in news_service.list_news(db, released_only=True):
+        detail = news_service.news_detail_dict(event)
+        news_items.append(
+            {
+                "id": detail["id"],
+                "title": detail["title"],
+                "description": detail["description"],
+                "released_at": detail["released_at"],
+                "sector_impacts": detail["sector_impacts"],
+            }
+        )
+    return {
+        "elapsed": clock["elapsed"],
+        "current_phase": clock["current_phase"],
+        "status": clock["status"],
+        "market_change_pct": str(change),
+        "latest_news": latest,
+        "news": news_items,
+    }
 
 
 @router.post("/export-snapshot")

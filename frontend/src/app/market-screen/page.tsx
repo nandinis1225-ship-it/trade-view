@@ -15,16 +15,17 @@ import {
   getApiBaseUrl,
   getSupabaseLeaderboardConfig,
   hasRemoteLeaderboard,
+  organizerMarketDashboard,
   probeMarketApi,
   type LeaderboardDiagnostics,
 } from "@/lib/api";
 import { getRuntimeConfig } from "@/lib/runtimeConfig";
-import { isOrganizerUnlocked, tryUnlockFromUrl } from "@/lib/organizerAuth";
+import { getStoredOrganizerPasskey, isOrganizerUnlocked, tryUnlockFromUrl } from "@/lib/organizerAuth";
 import type { NewsImpactRow } from "@/lib/sectorImpactUtils";
 
 type MarketStatus = {
   elapsed: string;
-  current_phase: string;
+  current_phase?: string;
   status: string;
   market_change_pct: string;
   latest_news: {
@@ -32,7 +33,7 @@ type MarketStatus = {
     title: string;
     description: string;
     released_at: string | null;
-    sector_impacts: Record<string, number>;
+    sector_impacts?: Record<string, number>;
   } | null;
 };
 
@@ -77,15 +78,30 @@ export default function MarketScreenPage() {
       return;
     }
 
+    const unlocked = isOrganizerUnlocked();
+    const passkey = getStoredOrganizerPasskey();
+
     try {
-      const [st, sec, nw] = await Promise.all([
-        apiGet<MarketStatus>("/market/status"),
-        apiGet<SectorGroup[]>("/market/sectors"),
-        apiGet<NewsItem[]>("/news"),
-      ]);
-      setStatus(st);
+      if (unlocked && passkey) {
+        const dashboard = await organizerMarketDashboard(passkey);
+        setStatus({
+          elapsed: dashboard.elapsed,
+          current_phase: dashboard.current_phase,
+          status: dashboard.status,
+          market_change_pct: dashboard.market_change_pct,
+          latest_news: dashboard.latest_news,
+        });
+        setNews(dashboard.news);
+      } else {
+        const [st, nw] = await Promise.all([
+          apiGet<MarketStatus>("/market/status"),
+          apiGet<NewsItem[]>("/news"),
+        ]);
+        setStatus(st);
+        setNews(nw);
+      }
+      const sec = await apiGet<SectorGroup[]>("/market/sectors");
       setSectors(sec);
-      setNews(nw);
     } catch (e) {
       setRefreshError(e instanceof Error ? e.message : "Market data fetch failed");
     }
@@ -193,11 +209,19 @@ export default function MarketScreenPage() {
           </div>
         )}
 
-        {latest && (
+        {latest && organizerMode && latest.sector_impacts && (
           <CurrentEventPanel
             title={latest.title}
             description={latest.description}
             sectorImpacts={latest.sector_impacts}
+          />
+        )}
+
+        {latest && !organizerMode && (
+          <CurrentEventPanel
+            title={latest.title}
+            description={latest.description}
+            sectorImpacts={{}}
           />
         )}
 
@@ -218,7 +242,7 @@ export default function MarketScreenPage() {
 
         <SectorSummaryGrid sectors={sectors} />
 
-        <SectorImpactMatrix news={news} />
+        {organizerMode && <SectorImpactMatrix news={news} />}
 
         <OrganizerDebugPanel
           lines={organizerDebugLines}

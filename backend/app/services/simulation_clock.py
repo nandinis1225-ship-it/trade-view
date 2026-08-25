@@ -60,3 +60,37 @@ def status_dict(db: Session) -> dict:
         "sim_speed_multiplier": float(state.sim_speed_multiplier),
         "trading_enabled": is_trading_enabled(state),
     }
+
+
+def participant_status_dict(db: Session) -> dict:
+    """Participant-safe simulation status — no phase or internal control metadata."""
+    state = get_or_create_state(db)
+    elapsed = float(state.sim_elapsed_sec)
+    return {
+        "status": state.status.value,
+        "elapsed_sec": elapsed,
+        "elapsed": format_sim_time(elapsed),
+        "duration_sec": float(state.sim_duration_sec),
+        "duration": format_sim_time(state.sim_duration_sec),
+        "trading_enabled": is_trading_enabled(state),
+    }
+
+
+_STATUS_FIELD_KEYS = frozenset(
+    {
+        "status",
+        "elapsed_sec",
+        "elapsed",
+        "duration_sec",
+        "duration",
+        "current_phase",
+        "sim_speed_multiplier",
+        "trading_enabled",
+    }
+)
+
+
+def participant_sim_control_response(db: Session, result: dict) -> dict:
+    """Merge simulation control metadata with participant-safe status fields."""
+    meta = {k: v for k, v in result.items() if k not in _STATUS_FIELD_KEYS}
+    return {**meta, **participant_status_dict(db)}
