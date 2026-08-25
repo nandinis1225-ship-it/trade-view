@@ -1,4 +1,4 @@
-# Run full event rehearsal gate before building participant package.
+﻿# Run full event rehearsal gate before building participant package.
 param(
     [int]$Speed = 60,
     [switch]$SkipRehearsal
@@ -15,7 +15,7 @@ if ($SkipRehearsal) {
 }
 
 if (-not (Test-Path $venvPython)) {
-    Write-Host "Backend venv missing — run developer-launch.bat once or create .venv"
+    Write-Host "Backend venv missing - run developer-launch.bat once or create .venv"
     exit 1
 }
 
@@ -44,9 +44,9 @@ $code = $LASTEXITCODE
 Pop-Location
 
 if ($code -ne 0) {
-    Write-Host "Developer rehearsal gate FAILED at ${Speed}x speed profile." -ForegroundColor Red
+    Write-Host "Developer rehearsal gate FAILED at $($Speed)x speed profile." -ForegroundColor Red
     exit $code
 }
 
-Write-Host "Developer rehearsal gate PASSED at ${Speed}x speed profile." -ForegroundColor Green
+Write-Host "Developer rehearsal gate PASSED at $($Speed)x speed profile." -ForegroundColor Green
 exit 0
