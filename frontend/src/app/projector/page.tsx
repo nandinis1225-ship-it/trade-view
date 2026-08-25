@@ -110,6 +110,16 @@ export default function ProjectorPage() {
       <header className="text-center">
         <h1 className="font-sans text-5xl font-bold tracking-[0.4em] md:text-7xl">TRADEVERSE</h1>
         <p className="mt-6 font-mono text-2xl tabular-nums text-white/70 md:text-4xl">{simLabel}</p>
+        {status?.market_change_pct != null && (
+          <p className="mt-4 text-sm uppercase tracking-[0.35em] text-white/50">Market movement</p>
+        )}
+        {status?.market_change_pct != null && (
+          <p
+            className={`mt-2 font-mono text-3xl tabular-nums md:text-5xl ${signClass(status.market_change_pct)}`}
+          >
+            {fmtPct(status.market_change_pct)}
+          </p>
+        )}
       </header>
 
       <section className="mx-auto mt-12 max-w-6xl">

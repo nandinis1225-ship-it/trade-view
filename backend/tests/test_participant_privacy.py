@@ -82,6 +82,8 @@ def test_market_status_has_no_phase_or_sector_impacts(client):
     body = client.get("/api/v1/market/status").json()
     assert "current_phase" not in body
     assert "sim_speed_multiplier" not in body
+    assert "duration" in body
+    assert "market_change_pct" in body
     latest = body.get("latest_news")
     if latest:
         assert "sector_impacts" not in latest
