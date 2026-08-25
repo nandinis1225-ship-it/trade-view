@@ -12,44 +12,8 @@ from sqlalchemy.orm import Session, joinedload
 from app.models import NewsEvent, Stock
 from app.models.news_stock_impact import NewsStockImpact
 from app.services import sector_service
+from app.services.sector_relationships import expanded_sector_map_for_event
 from app.services.simulation_settings_service import get_or_create_settings
-
-
-def _parse_map(raw: str | None) -> dict[str, float]:
-    if not raw:
-        return {}
-    try:
-        data = json.loads(raw)
-        if isinstance(data, dict):
-            return {str(k).lower(): float(v) for k, v in data.items()}
-    except (json.JSONDecodeError, TypeError, ValueError):
-        return {}
-    return {}
-
-
-# Normalize timeline sector names → slug keys
-SECTOR_ALIASES: dict[str, str] = {
-    "financials": "financials",
-    "it": "it",
-    "technology": "it",
-    "automobiles": "automobiles",
-    "automotive": "automobiles",
-    "energy": "energy",
-    "industrials": "industrials",
-    "infrastructure": "infrastructure",
-    "infra": "infrastructure",
-    "real estate": "real_estate",
-    "real_estate": "real_estate",
-    "metals": "metals",
-    "consumer": "consumer",
-    "healthcare": "consumer",
-    "broad market": "broad_market",
-    "broad_market": "broad_market",
-    "power / infrastructure": "infrastructure",
-    "financial services": "financials",
-    "manufacturing": "industrials",
-    "industrial minerals": "metals",
-}
 
 
 def _stock_sector_slug(stock: Stock) -> str | None:
@@ -66,20 +30,22 @@ def seeded_variation(stock_id: int, news_event_id: int, seed: int) -> float:
 
 
 def sector_impact_for_stock(event: NewsEvent, stock: Stock) -> float | None:
-    """Sector-first impact — ignores stock-specific JSON to avoid double application."""
-    sector_map_raw = _parse_map(event.sector_impacts_json)
-    sector_map = {SECTOR_ALIASES.get(k, k): v for k, v in sector_map_raw.items()}
+    """Sector-first impact — primary + one-hop cross-sector propagation, then stock variation."""
+    sector_map = expanded_sector_map_for_event(event)
 
     slug = _stock_sector_slug(stock)
     if slug and slug in sector_map:
         return sector_map[slug]
 
-    if event.market_wide_impact_pct is not None:
-        return float(event.market_wide_impact_pct)
-
-    market_wide = sector_map.get("broad_market")
-    if market_wide is not None:
-        return market_wide
+    # Legacy broad_market key inside sector_impacts JSON (no relationship expansion).
+    try:
+        raw = json.loads(event.sector_impacts_json or "{}")
+        if isinstance(raw, dict):
+            broad = raw.get("broad_market") or raw.get("broad market")
+            if broad is not None and slug:
+                return float(broad)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        pass
 
     return None
 

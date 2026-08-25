@@ -77,8 +77,9 @@ def test_news_sector_impact_deterministic_variation_bounds(db_session, mini_time
             ).all()
         )
         assert impacts, f"expected impacts for sector {sector_slug}"
-        for row in impacts:
-            assert row.sector_slug == sector_slug
+        primary_rows = [row for row in impacts if row.sector_slug == sector_slug]
+        assert primary_rows, f"expected primary-sector impacts for {sector_slug}"
+        for row in primary_rows:
             variation = float(row.variation_pct)
             assert -0.05 <= variation <= 0.05
             target = float(row.target_impact_pct)
