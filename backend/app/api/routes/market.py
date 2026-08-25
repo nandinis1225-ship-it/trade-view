@@ -23,6 +23,7 @@ def market_status(db: Session = Depends(get_db)) -> dict:
         latest = news_service.participant_news_dict(events[0])
     return {
         "elapsed": clock["elapsed"],
+        "duration": clock["duration"],
         "status": clock["status"],
         "market_change_pct": str(change),
         "latest_news": latest,

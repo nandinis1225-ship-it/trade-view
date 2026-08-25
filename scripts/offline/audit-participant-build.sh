@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Audit participant package for forbidden content
+# Audit participant package for forbidden content (aligned with audit-participant-build.ps1)
 set -euo pipefail
 
 ROOT="${1:-$(cd "$(dirname "$0")/../.." && pwd)}"
@@ -9,13 +9,28 @@ forbidden_patterns=(
   "TIMELINE_DECRYPT_KEY"
   "tradeverse_timeline.json"
   "tradeverse_timeline.baked.json"
+  "tradeverse_timeline.pkg"
   "SUPABASE"
   "supabase.co"
   "railway.app"
   "leaderboard"
+  "EUPHORIA"
+  "CRASH"
+  "RECOVERY"
+  "PHASE 1"
+  "PHASE 2"
+  "PHASE 3"
+  "PHASE 4"
+  "AI_TICK"
+  "MARKET_PULSE"
+  "sector_impacts"
+  "effective_impact"
+  "stop_loss"
+  "take_profit"
+  "current_phase"
+  "OrganizerDebugPanel"
   "/developer"
   "adminLogin"
-  "OrganizerDebugPanel"
 )
 
 forbidden_dirs=(admin market-screen developer)
@@ -31,14 +46,14 @@ scan() {
     done
     while IFS= read -r -d '' file; do
       for pat in "${forbidden_patterns[@]}"; do
-        if grep -q "$pat" "$file" 2>/dev/null; then
+        if grep -qF "$pat" "$file" 2>/dev/null; then
           failures+=("$file: contains '$pat'")
         fi
       done
     done < <(find "$path" -type f -print0)
   else
     for pat in "${forbidden_patterns[@]}"; do
-      if grep -q "$pat" "$path" 2>/dev/null; then
+      if grep -qF "$pat" "$path" 2>/dev/null; then
         failures+=("$path: contains '$pat'")
       fi
     done

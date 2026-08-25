@@ -1,4 +1,4 @@
-# Run full event rehearsal in developer mode before building participant package.
+# Run full event rehearsal gate before building participant package.
 param(
     [int]$Speed = 60,
     [switch]$SkipRehearsal
@@ -24,15 +24,29 @@ $env:LOCAL_INSTANCE_MODE = "true"
 $env:DATABASE_URL = "sqlite+pysqlite:///:memory:"
 $env:SIMULATION_SPEED = "$Speed"
 
+$gateTests = @(
+    "tests/test_phase5_accelerated_rehearsal.py",
+    "tests/test_phase5_gates.py",
+    "tests/test_phase3_validation.py",
+    "tests/test_recovery.py",
+    "tests/test_participant_privacy.py",
+    "tests/test_event_mode.py",
+    "tests/test_pin_security.py",
+    "tests/test_identity_lock.py",
+    "tests/test_dissolution.py",
+    "tests/test_developer_mode_gating.py",
+    "tests/test_cross_sector_news.py"
+)
+
 Push-Location $backendDir
-& $venvPython -m pytest tests/test_developer_mode_gating.py tests/test_checkpoint_jump.py -q
+& $venvPython -m pytest @gateTests -q
 $code = $LASTEXITCODE
 Pop-Location
 
 if ($code -ne 0) {
-    Write-Host "Developer rehearsal tests FAILED — fix before building participant package." -ForegroundColor Red
+    Write-Host "Developer rehearsal gate FAILED at ${Speed}x speed profile." -ForegroundColor Red
     exit $code
 }
 
-Write-Host "Developer rehearsal tests PASSED at ${Speed}x speed profile." -ForegroundColor Green
+Write-Host "Developer rehearsal gate PASSED at ${Speed}x speed profile." -ForegroundColor Green
 exit 0

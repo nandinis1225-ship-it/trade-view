@@ -62,12 +62,20 @@ export default function Home() {
 }
 `;
 
+function cleanNextCache() {
+  const nextDir = path.join(root, ".next");
+  const outDir = path.join(root, "out");
+  if (fs.existsSync(nextDir)) fs.rmSync(nextDir, { recursive: true, force: true });
+  if (fs.existsSync(outDir)) fs.rmSync(outDir, { recursive: true, force: true });
+}
+
 stashRoutes();
 fs.mkdirSync(stashDir, { recursive: true });
 if (fs.existsSync(homePath)) fs.copyFileSync(homePath, homeBackup);
 fs.writeFileSync(homePath, projectorHome, "utf8");
 
 try {
+  cleanNextCache();
   execSync("npm run build", {
     cwd: root,
     env: { ...process.env, PARTICIPANT_BUILD: "1", PROJECTOR_BUILD: "1" },
