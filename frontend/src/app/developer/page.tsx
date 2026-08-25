@@ -82,14 +82,23 @@ export default function DeveloperPage() {
 
   const refreshNews = useCallback(async () => {
     try {
-      const data = await devGet<Array<{ id: number; title: string; description?: string }>>("/news");
+      const data = await devGet<
+        Array<{
+          id: number;
+          title: string;
+          description?: string | null;
+          released_at?: string | null;
+          effective_impact?: string | number | null;
+        }>
+      >("/news");
       setNews(
         data.map((n) => ({
           id: n.id,
           title: n.title,
           description: n.description ?? "",
-          released_at: null,
-          effective_impact: null,
+          released_at: n.released_at ?? undefined,
+          effective_impact:
+            n.effective_impact == null ? undefined : String(n.effective_impact),
         })),
       );
     } catch {
