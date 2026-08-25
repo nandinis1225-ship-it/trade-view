@@ -7,8 +7,9 @@ import { StockSidebar, type SectorGroup, type SidebarStock } from "@/components/
 import { TradePanel } from "@/components/TradePanel";
 import { WalletBar } from "@/components/WalletBar";
 import { EventCompleteScreen, type EventResult } from "@/components/terminal/EventCompleteScreen";
-import { NewsBriefsPanel } from "@/components/terminal/NewsBriefsPanel";
+import { NewsFeedPanel } from "@/components/terminal/NewsFeedPanel";
 import { PinGateOverlay } from "@/components/terminal/PinGateOverlay";
+import { RecoveryScreen } from "@/components/terminal/RecoveryScreen";
 import { StartCountdown } from "@/components/terminal/StartCountdown";
 import { WalletPanel } from "@/components/terminal/WalletPanel";
 import { useMarketWebSocket } from "@/hooks/useMarketWebSocket";
@@ -22,7 +23,6 @@ import {
   apiPost,
   fetchHealthConfig,
   fetchSessionBootstrap,
-  isLocalInstance,
   isParticipantEventMode,
   joinSession,
   startLocalSimulation,
@@ -51,7 +51,11 @@ type SimulationState = {
   status?: string;
   trading_enabled?: boolean;
   elapsed?: string;
+  duration?: string;
+  elapsed_sec?: number;
 };
+
+type GatePhase = "loading" | "start" | "recovery" | "countdown" | "ready";
 
 function asMoney(v: unknown): string {
   if (v == null) return "0";
@@ -62,15 +66,11 @@ function newsFromPayload(raw: Record<string, unknown> | undefined): NewsItem | n
   if (!raw) return null;
   const title = String(raw.title ?? raw.headline ?? "").trim();
   if (!title) return null;
-  const briefRaw = raw.brief_points;
-  const brief_points =
-    Array.isArray(briefRaw) ? briefRaw.map((p) => String(p)).filter(Boolean) : undefined;
   return {
     id: Number(raw.id ?? 0),
     title,
     description: String(raw.description ?? ""),
     released_at: raw.released_at ? String(raw.released_at) : undefined,
-    brief_points,
   };
 }
 
@@ -114,17 +114,14 @@ function mapNewsItems(
 
 export default function TerminalPage() {
   const eventMode = isParticipantEventMode();
-  const [eventModeResolved, setEventModeResolved] = useState(!isLocalInstance());
   const [pinRequired, setPinRequired] = useState(eventMode);
+  const [gatePhase, setGatePhase] = useState<GatePhase>("loading");
+
   const [traderId, setTraderId] = useState<number | null>(null);
   const [traderName, setTraderName] = useState("Trader");
   const [eventPin, setEventPin] = useState("");
   const [pinError, setPinError] = useState<string | null>(null);
   const [pinLoading, setPinLoading] = useState(false);
-  const [pinUnlocked, setPinUnlocked] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.sessionStorage.getItem("tradeverse_pin_ok") === "1";
-  });
   const [countdown, setCountdown] = useState<number | null>(null);
   const [startingSim, setStartingSim] = useState(false);
   const validatedPinRef = useRef("");
@@ -137,8 +134,7 @@ export default function TerminalPage() {
   const [tradeCount, setTradeCount] = useState(0);
   const [breaking, setBreaking] = useState<NewsItem | null>(null);
   const [newsFeed, setNewsFeed] = useState<NewsItem[]>([]);
-  const [showWallet, setShowWallet] = useState(false);
-  const [showNewsBriefs, setShowNewsBriefs] = useState(false);
+  const [showHoldings, setShowHoldings] = useState(false);
   const [ipos, setIpos] = useState<IPO[]>([]);
   const [ipoLots, setIpoLots] = useState(1);
   const [qty, setQty] = useState(10);
@@ -150,7 +146,7 @@ export default function TerminalPage() {
   const [tradingEnabled, setTradingEnabled] = useState(false);
   const [simStatus, setSimStatus] = useState<string>("not_started");
   const [simElapsed, setSimElapsed] = useState<string | null>(null);
-  const [wsStatus, setWsStatus] = useState<"LIVE" | "OFF" | "Reconnecting">("OFF");
+  const [simDuration, setSimDuration] = useState<string | null>(null);
 
   const selected = useMemo(
     () => stocks.find((s) => s.id === selectedId) ?? null,
@@ -175,8 +171,10 @@ export default function TerminalPage() {
     [stocks],
   );
 
+  const eventComplete = simStatus === "completed";
+
   const eventResult = useMemo<EventResult | null>(() => {
-    if (simStatus !== "completed" || !displayWallet) return null;
+    if (!eventComplete || !displayWallet) return null;
     const cash = Number(displayWallet.available_cash ?? 0);
     const portfolioValue = Number(displayWallet.portfolio_value ?? 0);
     const holdingsValue = Math.max(0, portfolioValue - cash);
@@ -190,7 +188,7 @@ export default function TerminalPage() {
       returnPct: displayWallet.return_pct ?? "0",
       tradeCount,
     };
-  }, [simStatus, displayWallet, traderName, tradeCount]);
+  }, [eventComplete, displayWallet, traderName, tradeCount]);
 
   const patchStockPrice = useCallback(
     (stockId: number, ltp: string, percentChange?: string) => {
@@ -227,6 +225,7 @@ export default function TerminalPage() {
     if (!sim) return;
     if (sim.status) setSimStatus(String(sim.status));
     if (sim.elapsed) setSimElapsed(String(sim.elapsed));
+    if (sim.duration) setSimDuration(String(sim.duration));
     if (typeof sim.trading_enabled === "boolean") {
       setTradingEnabled(sim.trading_enabled);
     } else if (sim.status) {
@@ -238,7 +237,7 @@ export default function TerminalPage() {
     setBreaking(item);
     setNewsFeed((prev) => {
       const without = prev.filter((n) => n.id !== item.id);
-      return [item, ...without].slice(0, 20);
+      return [item, ...without].slice(0, 30);
     });
   }, []);
 
@@ -281,27 +280,28 @@ export default function TerminalPage() {
             is_open: s.is_open ?? true,
           })),
         );
-        if (!selectedId) {
-          setSelectedId(data.stocks.find((s) => s.is_open !== false)?.id ?? data.stocks[0].id);
-        }
+        setSelectedId((prev) => {
+          if (prev) return prev;
+          return data.stocks.find((s) => s.is_open !== false)?.id ?? data.stocks[0].id;
+        });
       }
       if (data.sectors?.length) setSectors(data.sectors);
       if (data.open_ipos?.length) setIpos(data.open_ipos);
+      else setIpos([]);
       if (data.released_news?.length) {
-        const items = mapNewsItems(data.released_news);
-        setNewsFeed(items);
-        setBreaking((prev) => prev ?? items[0]);
+        setNewsFeed(mapNewsItems(data.released_news));
       }
+      return data;
     },
-    [selectedId, applySimulationState],
+    [applySimulationState],
   );
 
   const resyncBootstrap = useCallback(async () => {
     const token = localStorage.getItem("mse_access_token");
-    if (!token) return;
+    if (!token) return null;
     try {
       const data = await fetchSessionBootstrap();
-      applyBootstrap(data);
+      return applyBootstrap(data);
     } catch (e) {
       const message = e instanceof Error ? e.message : "";
       if (isAuthError(message)) {
@@ -311,6 +311,7 @@ export default function TerminalPage() {
         setWallet(null);
         setPortfolio(null);
       }
+      return null;
     }
   }, [applyBootstrap]);
 
@@ -346,62 +347,78 @@ export default function TerminalPage() {
   }, [traderId]);
 
   const refresh = useCallback(async () => {
+    if (gatePhase !== "ready" && gatePhase !== "countdown") return;
     try {
       const s = await apiGet<SidebarStock[]>("/stocks");
       setStocks(s);
-      if (!selectedId && s.length) setSelectedId(s[0].id);
+      setSelectedId((prev) => prev ?? (s.length ? s[0].id : null));
       const data = await apiGet<SectorGroup[]>("/market/sectors");
       setSectors(data);
       const openIpos = await apiGet<IPO[]>("/ipos/open").catch(() => [] as IPO[]);
       setIpos(openIpos);
       if (traderId) await refreshWallet(traderId);
       const news = await apiGet<NewsItem[]>("/news").catch(() => [] as NewsItem[]);
-      if (news.length) setNewsFeed(mapNewsItems(news.slice(0, 20)));
+      if (news.length) setNewsFeed(mapNewsItems(news.slice(0, 30)));
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load data");
     }
-  }, [refreshWallet, selectedId, traderId]);
+  }, [refreshWallet, traderId, gatePhase]);
 
   useEffect(() => {
     void fetchHealthConfig()
-      .then((health) => {
-        if (health.participant_event_mode != null) {
-          setPinRequired(Boolean(health.pin_required ?? health.participant_event_mode));
+      .then(async (health) => {
+        const needsPin = Boolean(health.pin_required ?? health.participant_event_mode);
+        setPinRequired(needsPin);
+
+        const token = localStorage.getItem("mse_access_token");
+        const savedName = localStorage.getItem("mse_trader_name");
+        if (savedName) setTraderName(savedName);
+
+        if (!needsPin) {
+          if (token) {
+            await resyncBootstrap();
+            setGatePhase("ready");
+          } else {
+            setGatePhase("start");
+          }
+          return;
+        }
+
+        if (token) {
+          const data = await resyncBootstrap();
+          const sim = data?.simulation as SimulationState | undefined;
+          const status = sim?.status ?? "not_started";
+          const elapsedSec = Number(sim?.elapsed_sec ?? 0);
+          const hasProgress =
+            status === "running" || status === "completed" || elapsedSec > 0 || Boolean(data?.trader_id);
+
+          if (hasProgress) {
+            setGatePhase(status === "completed" ? "ready" : "recovery");
+            if (status === "completed") return;
+          } else {
+            setGatePhase("start");
+          }
+        } else {
+          setGatePhase("start");
         }
       })
-      .catch(() => {})
-      .finally(() => setEventModeResolved(true));
-  }, []);
+      .catch(() => setGatePhase("start"));
+  }, [resyncBootstrap]);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    const saved = localStorage.getItem("mse_trader_id");
-    const token = localStorage.getItem("mse_access_token");
-    const savedName = localStorage.getItem("mse_trader_name");
-    if (savedName) setTraderName(savedName);
-    if (saved && token && (!pinRequired || pinUnlocked)) {
-      setTraderId(Number(saved));
-      void resyncBootstrap();
-    }
-  }, [resyncBootstrap, pinRequired, pinUnlocked]);
+    if (gatePhase === "ready") void refresh();
+  }, [gatePhase, refresh]);
 
   useEffect(() => {
     if (!breaking) return;
-    const id = window.setTimeout(() => setBreaking(null), 20_000);
+    const id = window.setTimeout(() => setBreaking(null), 18_000);
     return () => window.clearTimeout(id);
   }, [breaking]);
 
-  const { connected, reconnecting } = useMarketWebSocket({
-    onOpen: () => setWsStatus("LIVE"),
-    onClose: () => setWsStatus("Reconnecting"),
-    onReconnect: () => {
-      setWsStatus("LIVE");
-      void resyncBootstrap();
-    },
+  const { connected } = useMarketWebSocket({
+    enabled: gatePhase === "ready",
+    onReconnect: () => void resyncBootstrap(),
     onMessage: (msg) => {
       if (msg.event === "NEWS_RELEASED") {
         const raw = (msg.payload ?? msg) as Record<string, unknown>;
@@ -445,14 +462,10 @@ export default function TerminalPage() {
   });
 
   useEffect(() => {
-    if (reconnecting) setWsStatus("Reconnecting");
-  }, [reconnecting]);
-
-  useEffect(() => {
-    if (connected) return;
-    const id = window.setInterval(() => void refresh(), 12000);
+    if (!connected || gatePhase !== "ready") return;
+    const id = window.setInterval(() => void refresh(), 15000);
     return () => window.clearInterval(id);
-  }, [connected, refresh]);
+  }, [connected, gatePhase, refresh]);
 
   useEffect(() => {
     if (!toast) return;
@@ -465,17 +478,20 @@ export default function TerminalPage() {
     setStartingSim(true);
     setError(null);
     try {
-      const created = await joinSession(traderName || "Trader");
-      setTraderId(created.trader_id);
-      await startLocalSimulation(pin);
-      setSimStatus("running");
-      setTradingEnabled(true);
+      await joinSession(traderName || "Trader");
+      const data = await resyncBootstrap();
+      const status = (data?.simulation as SimulationState | undefined)?.status;
+      if (status !== "running" && status !== "completed") {
+        await startLocalSimulation(pin);
+        setSimStatus("running");
+        setTradingEnabled(true);
+      }
       await resyncBootstrap();
       await refresh();
+      setGatePhase("ready");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start simulation");
-      setPinUnlocked(false);
-      window.sessionStorage.removeItem("tradeverse_pin_ok");
+      setGatePhase("start");
     } finally {
       setStartingSim(false);
     }
@@ -483,7 +499,7 @@ export default function TerminalPage() {
 
   useEffect(() => {
     if (countdown === null) return;
-    if (countdown <= 0) {
+    if (countdown < 0) {
       setCountdown(null);
       void beginEventStart();
       return;
@@ -492,15 +508,15 @@ export default function TerminalPage() {
     return () => window.clearTimeout(id);
   }, [countdown, beginEventStart]);
 
-  async function handlePinSubmit() {
+  async function handleStartSubmit() {
     setPinLoading(true);
     setPinError(null);
     try {
       await validateEventPin(eventPin.trim());
       validatedPinRef.current = eventPin.trim();
       window.sessionStorage.setItem("tradeverse_pin_ok", "1");
-      setPinUnlocked(true);
       setCountdown(3);
+      setGatePhase("countdown");
     } catch (e) {
       setPinError(e instanceof Error ? e.message : "Invalid PIN");
     } finally {
@@ -508,13 +524,35 @@ export default function TerminalPage() {
     }
   }
 
-  async function join() {
+  async function handleResumeSubmit() {
+    setPinLoading(true);
+    setPinError(null);
     try {
-      const created = await joinSession(traderName || "Trader");
-      setTraderId(created.trader_id);
+      await validateEventPin(eventPin.trim());
+      validatedPinRef.current = eventPin.trim();
+      window.sessionStorage.setItem("tradeverse_pin_ok", "1");
+      await joinSession(traderName);
+      const data = await resyncBootstrap();
+      const status = (data?.simulation as SimulationState | undefined)?.status;
+      if (status === "running" || status === "completed") {
+        setGatePhase("ready");
+        setToast("Simulation resumed");
+      } else {
+        setCountdown(3);
+        setGatePhase("countdown");
+      }
+    } catch (e) {
+      setPinError(e instanceof Error ? e.message : "Invalid PIN");
+    } finally {
+      setPinLoading(false);
+    }
+  }
+
+  async function joinDev() {
+    try {
+      await joinSession(traderName || "Trader");
       await resyncBootstrap();
-      await refreshWallet(created.trader_id);
-      await refresh();
+      setGatePhase("ready");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not join session");
     }
@@ -532,7 +570,7 @@ export default function TerminalPage() {
   }
 
   async function executeOrder() {
-    if (!traderId || !selectedId || !confirmSide) return;
+    if (!traderId || !selectedId || !confirmSide || eventComplete) return;
     setConfirmLoading(true);
     setConfirmError(null);
     try {
@@ -561,21 +599,17 @@ export default function TerminalPage() {
   }
 
   async function applyIpo() {
-    if (!traderId || !ipos[0]) return;
+    if (!traderId || !ipos[0] || eventComplete) return;
     try {
       await apiPost(`/ipos/${ipos[0].id}/apply`, { trader_id: traderId, requested_lots: ipoLots });
-      setToast("IPO applied");
+      setToast("IPO application submitted");
       await refreshWallet(traderId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "IPO failed");
     }
   }
 
-  const latestNews = newsFeed[0] ?? breaking;
-  const showPinGate = eventModeResolved && pinRequired && !pinUnlocked;
-  const showCountdown = countdown !== null && countdown > 0;
-
-  if (!eventModeResolved) {
+  if (gatePhase === "loading") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-black text-[var(--muted)]">
         Loading…
@@ -583,7 +617,7 @@ export default function TerminalPage() {
     );
   }
 
-  if (!pinRequired && !traderId) {
+  if (!pinRequired && gatePhase === "start") {
     return (
       <div className="min-h-screen font-sans text-[var(--foreground)]">
         <div className="mx-auto max-w-sm px-4 py-16">
@@ -598,7 +632,7 @@ export default function TerminalPage() {
           <button
             type="button"
             className="mt-4 w-full rounded border border-[var(--accent)] py-2.5 text-[var(--accent)]"
-            onClick={join}
+            onClick={() => void joinDev()}
           >
             Continue
           </button>
@@ -608,50 +642,35 @@ export default function TerminalPage() {
     );
   }
 
+  const tradingLocked = eventComplete || gatePhase !== "ready";
+
   return (
     <div className="flex min-h-screen flex-col text-sm text-[var(--foreground)]">
       <WalletBar
         cash={displayWallet?.available_cash}
         portfolio={displayWallet?.portfolio_value}
         pnl={displayWallet?.total_pnl}
-        ret={displayWallet?.return_pct}
-        tradingEnabled={tradingEnabled}
         elapsed={simElapsed}
-        onWallet={() => setShowWallet((v) => !v)}
-        showWallet={showWallet}
+        duration={simDuration}
+        onHoldings={() => setShowHoldings((v) => !v)}
+        showHoldings={showHoldings}
       />
+
       <WalletPanel
-        open={showWallet}
+        open={showHoldings}
         portfolio={portfolio}
         availableCash={displayWallet?.available_cash}
         portfolioValue={displayWallet?.portfolio_value}
         stocks={stocks}
       />
-      <NewsBriefsPanel
-        news={newsFeed}
-        open={showNewsBriefs}
-        onToggle={() => setShowNewsBriefs((v) => !v)}
-      />
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--line)] px-3 py-1.5 text-[10px] text-[var(--muted)] sm:px-4">
-        <span className="font-mono">
-          {wsStatus}
-          {!connected && wsStatus === "OFF" ? " · fallback poll 12s" : ""}
-        </span>
-      </div>
-
-      {latestNews && (
-        <div className="border-b border-[#ef4444]/30 bg-[#ef4444]/8 px-3 py-2 sm:px-4">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-[#ef4444]">Latest news</p>
-          <p className="mt-1 text-sm leading-snug">{latestNews.title}</p>
-          {latestNews.description && (
-            <p className="mt-1 line-clamp-2 text-xs text-[var(--muted)]">{latestNews.description}</p>
-          )}
-        </div>
-      )}
 
       <BreakingNewsAlert news={breaking} onDismiss={() => setBreaking(null)} />
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 lg:grid-cols-[220px_1fr] xl:grid-cols-[260px_1fr]">
+      <div
+        className={`grid min-h-0 flex-1 grid-cols-1 gap-0 lg:grid-cols-[minmax(200px,260px)_1fr] xl:grid-cols-[minmax(220px,280px)_1fr_minmax(220px,300px)] ${
+          tradingLocked && !eventComplete ? "pointer-events-none opacity-60" : ""
+        }`}
+      >
         <StockSidebar
           sectors={sectors}
           dissolved={dissolvedStocks}
@@ -665,7 +684,7 @@ export default function TerminalPage() {
           qty={qty}
           onQtyChange={setQty}
           holdingQty={holdingQty}
-          tradingEnabled={tradingEnabled && simStatus !== "completed"}
+          tradingEnabled={tradingEnabled && !eventComplete}
           onBuy={() => openConfirm("buy")}
           onSell={() => openConfirm("sell")}
           confirmSide={confirmSide}
@@ -676,8 +695,9 @@ export default function TerminalPage() {
           ipo={ipos[0] ?? null}
           ipoLots={ipoLots}
           onIpoLotsChange={setIpoLots}
-          onIpoApply={ipos[0] ? applyIpo : undefined}
+          onIpoApply={ipos[0] && !eventComplete ? applyIpo : undefined}
         />
+        <NewsFeedPanel news={newsFeed} />
       </div>
 
       {error && <p className="px-4 py-2 text-xs text-[#ef4444]">{error}</p>}
@@ -685,17 +705,10 @@ export default function TerminalPage() {
       {toast && (
         <div className="fixed bottom-4 left-4 max-w-sm rounded border border-[var(--line)] bg-[var(--panel)] p-3 text-xs shadow-lg">
           {toast}
-          <button
-            type="button"
-            className="ml-3 text-[var(--muted)] hover:text-[var(--foreground)]"
-            onClick={() => setToast(null)}
-          >
-            ×
-          </button>
         </div>
       )}
 
-      {showPinGate && (
+      {gatePhase === "start" && pinRequired && (
         <PinGateOverlay
           name={traderName}
           pin={eventPin}
@@ -703,11 +716,26 @@ export default function TerminalPage() {
           loading={pinLoading || startingSim}
           onNameChange={setTraderName}
           onPinChange={setEventPin}
-          onSubmit={() => void handlePinSubmit()}
+          onSubmit={() => void handleStartSubmit()}
         />
       )}
 
-      {showCountdown && <StartCountdown value={countdown} />}
+      {gatePhase === "recovery" && (
+        <RecoveryScreen
+          participantName={traderName}
+          elapsed={simElapsed ?? "00:00:00"}
+          duration={simDuration ?? "03:00:00"}
+          pnl={displayWallet?.total_pnl ?? "0"}
+          returnPct={displayWallet?.return_pct ?? "0"}
+          pin={eventPin}
+          error={pinError}
+          loading={pinLoading}
+          onPinChange={setEventPin}
+          onResume={() => void handleResumeSubmit()}
+        />
+      )}
+
+      {gatePhase === "countdown" && countdown !== null && <StartCountdown value={countdown} />}
 
       {eventResult && <EventCompleteScreen result={eventResult} />}
     </div>

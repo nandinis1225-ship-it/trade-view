@@ -12,7 +12,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
 const appDir = path.join(root, "src", "app");
 const stashDir = path.join(root, ".participant-stash");
-const excludeRoutes = ["admin", "developer", "market-screen"];
+const excludeRoutes = ["admin", "developer", "market-screen", "projector"];
 
 function stashRoutes() {
   fs.mkdirSync(stashDir, { recursive: true });

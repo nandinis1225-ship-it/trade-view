@@ -6,6 +6,7 @@ import { wsUrl } from "@/lib/participant-api";
 export type WsMessage = { event: string; payload?: Record<string, unknown> } & Record<string, unknown>;
 
 type Handlers = {
+  enabled?: boolean;
   onMessage?: (msg: WsMessage) => void;
   onOpen?: () => void;
   onClose?: () => void;
@@ -20,8 +21,14 @@ export function useMarketWebSocket(handlers: Handlers) {
   const [reconnecting, setReconnecting] = useState(false);
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
+  const enabled = handlers.enabled !== false;
 
   useEffect(() => {
+    if (!enabled) {
+      setConnected(false);
+      setReconnecting(false);
+      return;
+    }
     let ws: WebSocket | null = null;
     let retry: ReturnType<typeof setTimeout> | null = null;
     let unmounted = false;
@@ -81,7 +88,7 @@ export function useMarketWebSocket(handlers: Handlers) {
       if (retry) clearTimeout(retry);
       ws?.close();
     };
-  }, []);
+  }, [enabled]);
 
   return { connected, reconnecting };
 }

@@ -20,14 +20,27 @@ export function PinGateOverlay({
   onSubmit,
 }: Props) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm">
-      <div className="w-full max-w-sm px-6 text-center">
-        <h1 className="font-sans text-2xl font-bold tracking-[0.35em] text-[var(--foreground)]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
+      <div className="w-full max-w-sm text-center">
+        <h1 className="font-sans text-3xl font-bold tracking-[0.35em] text-[var(--foreground)]">
           TRADEVERSE
         </h1>
+
+        <p className="mt-10 text-xs uppercase tracking-[0.25em] text-[var(--muted)]">
+          Participant name
+        </p>
+        <input
+          className="mt-3 w-full rounded border border-[var(--line)] bg-[var(--background)] px-3 py-3 text-center font-sans text-base text-[var(--foreground)] outline-none focus:border-[var(--accent)]"
+          value={name}
+          onChange={(e) => onNameChange(e.target.value)}
+          placeholder="Your name"
+          maxLength={64}
+          autoFocus
+        />
+
         <p className="mt-8 text-xs uppercase tracking-[0.25em] text-[var(--muted)]">Event PIN</p>
         <input
-          className="mt-4 w-full border-b border-[var(--line)] bg-transparent py-3 text-center font-mono text-2xl tracking-[0.5em] text-[var(--foreground)] outline-none focus:border-[var(--accent)]"
+          className="mt-3 w-full border-b border-[var(--line)] bg-transparent py-3 text-center font-mono text-2xl tracking-[0.5em] text-[var(--foreground)] outline-none focus:border-[var(--accent)]"
           value={pin}
           onChange={(e) => onPinChange(e.target.value)}
           placeholder="····"
@@ -38,19 +51,10 @@ export function PinGateOverlay({
             if (e.key === "Enter") onSubmit();
           }}
         />
-        <input
-          className="mt-6 w-full rounded border border-[var(--line)] bg-[var(--background)] px-3 py-2.5 text-center font-sans text-sm text-[var(--foreground)] outline-none focus:border-[var(--accent)]"
-          value={name}
-          onChange={(e) => onNameChange(e.target.value)}
-          placeholder="Your name"
-          maxLength={64}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") onSubmit();
-          }}
-        />
+
         <button
           type="button"
-          className="mt-8 w-full rounded border border-[var(--accent)] py-3 font-sans text-sm font-medium uppercase tracking-[0.2em] text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/10 disabled:opacity-50"
+          className="mt-10 w-full rounded border border-[var(--accent)] py-3 font-sans text-sm font-medium uppercase tracking-[0.2em] text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/10 disabled:opacity-50"
           disabled={loading || !pin.trim() || !name.trim()}
           onClick={onSubmit}
         >

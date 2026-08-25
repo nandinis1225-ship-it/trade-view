@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { fmtMoney, fmtPct, signClass } from "@/lib/marketFormat";
 
 export type SidebarStock = {
@@ -38,7 +38,17 @@ type Props = {
 };
 
 export function StockSidebar({ sectors, dissolved = [], selectedId, onSelect }: Props) {
-  const [expandedSectors, setExpandedSectors] = useState<Set<string>>(() => new Set());
+  const [expandedSectors, setExpandedSectors] = useState<Set<string>>(
+    () => new Set(sectors.map((s) => s.slug)),
+  );
+
+  useEffect(() => {
+    setExpandedSectors((prev) => {
+      const next = new Set(prev);
+      for (const sector of sectors) next.add(sector.slug);
+      return next;
+    });
+  }, [sectors]);
 
   function toggleSector(slug: string) {
     setExpandedSectors((prev) => {
@@ -81,11 +91,11 @@ export function StockSidebar({ sectors, dissolved = [], selectedId, onSelect }: 
                 onClick={() => toggleSector(sector.slug)}
                 className="sticky top-0 z-10 flex w-full items-center justify-between bg-[var(--panel)]/95 px-3 py-2 text-left hover:bg-white/[0.04]"
               >
-                <span className="text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--foreground)]">
                   {isOpen ? "▼" : "▶"} {sector.name}
                 </span>
-                <span className={`text-[10px] tabular-nums ${signClass(avg)}`}>
-                  Avg {fmtPct(avg)}
+                <span className={`text-xs font-mono tabular-nums ${signClass(avg)}`}>
+                  {fmtPct(avg)}
                 </span>
               </button>
               {isOpen && (
@@ -103,7 +113,9 @@ export function StockSidebar({ sectors, dissolved = [], selectedId, onSelect }: 
                       >
                         <span>
                           <span className="block font-mono font-medium">{s.ticker}</span>
-                          <span className="block text-[10px] text-[var(--muted)]">{s.company_name}</span>
+                        <span className="block text-[10px] text-[var(--muted)] truncate max-w-[120px]">
+                          {s.company_name}
+                        </span>
                         </span>
                         <span className="text-right">
                           <span className="block tabular-nums">{fmtMoney(s.last_traded_price)}</span>

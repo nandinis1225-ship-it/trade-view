@@ -44,12 +44,42 @@ EVENT_PIN_SALT={pin_salt}
 EVENT_PIN_HASH={pin_hash}
 """
 
+PROJECTOR_ENV_LINES = """# TRADEVERSE projector package — auto-generated
+LOCAL_INSTANCE_MODE=true
+PARTICIPANT_EVENT_MODE=false
+DEVELOPER_MODE=false
+PROJECTOR_MODE=true
+ENVIRONMENT=production
+DEBUG=false
+AUTO_INIT_DB=true
+TIMELINE_EMBEDDED=true
+
+BACKEND_HOST=127.0.0.1
+BACKEND_PORT=8765
+BACKEND_URL=http://127.0.0.1:8765
+FRONTEND_URL=http://127.0.0.1:8765
+CORS_ORIGINS=http://127.0.0.1:8765,http://localhost:8765
+
+DEFAULT_STARTING_CAPITAL=500000
+SIMULATION_SPEED=1
+RANDOM_SEED=42
+
+SERVE_STATIC_UI=true
+HIDE_ADMIN_UI=true
+NEXT_PUBLIC_LOCAL_INSTANCE=true
+
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8765
+NEXT_PUBLIC_WS_URL=ws://127.0.0.1:8765
+NEXT_PUBLIC_API_PREFIX=/api/v1
+"""
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate participant event .env")
     parser.add_argument("--timeline-key", required=True)
-    parser.add_argument("--event-pin", required=True)
+    parser.add_argument("--event-pin", default="0000")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--projector", action="store_true", help="Write projector .env (no PIN)")
     parser.add_argument(
         "--bake-timeline",
         type=Path,
@@ -58,13 +88,16 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    pin_salt, pin_hash = generate_pin_verifier(args.event_pin.strip())
     bake_dest = args.bake_timeline
     if bake_dest is None:
         bake_dest = Path(__file__).resolve().parents[1] / "app" / "seed" / "tradeverse_timeline.baked.json"
     bake_timeline_for_participant(args.timeline_key.strip(), dest=bake_dest)
 
-    content = EVENT_ENV_LINES.format(pin_salt=pin_salt, pin_hash=pin_hash)
+    if args.projector:
+        content = PROJECTOR_ENV_LINES
+    else:
+        pin_salt, pin_hash = generate_pin_verifier(args.event_pin.strip())
+        content = EVENT_ENV_LINES.format(pin_salt=pin_salt, pin_hash=pin_hash)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(content, encoding="utf-8")
     print(f"Wrote event .env to {args.output}")
