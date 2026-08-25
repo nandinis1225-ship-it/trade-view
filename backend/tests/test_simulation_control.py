@@ -16,12 +16,12 @@ from app.services.simulation_controller import (
 from app.services.timeline_service import load_timeline_json, parse_time_to_sec, validate_timeline
 
 
-def test_timeline_json_valid():
+def test_timeline_json_valid(production_timeline):
     errors = validate_timeline()
     assert errors == [], errors
 
 
-def test_timeline_duration_end():
+def test_timeline_duration_end(production_timeline):
     data = load_timeline_json()
     end_events = [e for e in data["events"] if e["type"] == "SIMULATION_END"]
     assert len(end_events) == 1
@@ -34,7 +34,7 @@ def test_parse_time_hh_mm_not_mm_ss():
     assert parse_time_to_sec("02:59:30") == 10770
 
 
-def test_start_stop_resume(db_session):
+def test_start_stop_resume(db_session, production_timeline):
     from app.services.timeline_service import seed_timeline_from_json
 
     seed_timeline_from_json(db_session, force=True)
@@ -54,7 +54,7 @@ def test_start_stop_resume(db_session):
     assert float(state2.sim_elapsed_sec) == elapsed_at_pause
 
 
-def test_reset_restores_timeline_pending(db_session):
+def test_reset_restores_timeline_pending(db_session, production_timeline):
     from app.services.timeline_service import seed_timeline_from_json
 
     seed_timeline_from_json(db_session, force=True)

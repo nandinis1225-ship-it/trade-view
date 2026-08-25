@@ -13,7 +13,7 @@ from app.services.simulation_settings_service import update_settings
 from app.services.timeline_service import seed_timeline_from_json
 
 
-def test_accelerated_timeline_executes_all_checkpoints(db_session):
+def test_accelerated_timeline_executes_all_checkpoints(db_session, production_timeline):
     seed_timeline_from_json(db_session, force=True)
     reset_simulation(db_session)
     update_settings(db_session, sim_speed_multiplier=3600.0)
@@ -43,7 +43,7 @@ def test_accelerated_timeline_executes_all_checkpoints(db_session):
     assert get_or_create_state(db_session).status == SimulationStatus.COMPLETED
 
 
-def test_stop_freezes_timeline_progress(db_session):
+def test_stop_freezes_timeline_progress(db_session, production_timeline):
     seed_timeline_from_json(db_session, force=True)
     reset_simulation(db_session)
     start_simulation(db_session)
@@ -72,7 +72,7 @@ def test_stop_freezes_timeline_progress(db_session):
     assert executed_after == executed_at_stop
 
 
-def test_news_creates_sector_impacts_and_moves_market(db_session):
+def test_news_creates_sector_impacts_and_moves_market(db_session, production_timeline):
     """Release one NEWS event — sector impacts created and prices react."""
     from decimal import Decimal
 

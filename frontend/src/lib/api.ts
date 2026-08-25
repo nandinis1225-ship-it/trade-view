@@ -1,6 +1,6 @@
 import type { SectorGroup } from "@/components/StockSidebar";
 import type { LeaderboardRow } from "@/components/Leaderboard";
-import { getRuntimeConfig, isAuthError } from "@/lib/runtimeConfig";
+import { getRuntimeConfig } from "@/lib/runtimeConfig";
 
 const API_PREFIX = process.env.NEXT_PUBLIC_API_PREFIX ?? "/api/v1";
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -20,10 +20,6 @@ function defaultHeaders(): HeadersInit {
     headers["ngrok-skip-browser-warning"] = "1";
   }
   return headers;
-}
-
-function isProductionBuild(): boolean {
-  return process.env.NODE_ENV === "production";
 }
 
 /** Resolve API base URL: runtime config, env, then offline default port 8765. */

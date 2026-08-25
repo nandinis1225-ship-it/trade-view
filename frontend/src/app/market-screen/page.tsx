@@ -39,7 +39,7 @@ type MarketStatus = {
 
 type NewsItem = NewsImpactRow & {
   description?: string;
-  released_at?: string;
+  released_at?: string | null;
 };
 
 type ApiProbe = { ok: boolean; url: string; error?: string };

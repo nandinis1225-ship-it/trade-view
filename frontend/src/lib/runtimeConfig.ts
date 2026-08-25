@@ -5,6 +5,7 @@ export type TradeverseRuntimeConfig = {
   supabaseUrl?: string;
   supabaseAnonKey?: string;
   supabaseLeaderboardTable?: string;
+  supabaseEventControlTable?: string;
   localInstance?: boolean;
   participantEventMode?: boolean;
   pinRequired?: boolean;

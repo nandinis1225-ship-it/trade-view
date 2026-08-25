@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from typing import Any
 
 import app.models  # noqa: F401 — register metadata
 import pytest
@@ -16,7 +17,8 @@ from app.core.database import Base, get_db
 from app.exchange.book_registry import books
 from app.main import create_app
 
-TEST_TIMELINE = {
+# TEST ONLY — mini timeline for fast unit/integration tests. Not the production timeline.
+TEST_TIMELINE_MINI: dict[str, Any] = {
     "events": [
         {
             "checkpoint_id": 1,
@@ -40,16 +42,36 @@ TEST_TIMELINE = {
 }
 
 
-@pytest.fixture(autouse=True)
-def _patch_timeline_for_tests(monkeypatch):
-    """Use in-repo mini timeline when encrypted production timeline is unavailable."""
+def _patch_timeline(monkeypatch, timeline: dict[str, Any]) -> None:
     from app.services import timeline_service
 
-    monkeypatch.setattr(timeline_service, "load_timeline_json", lambda: TEST_TIMELINE)
+    monkeypatch.setattr(timeline_service, "load_timeline_json", lambda: timeline)
     monkeypatch.setattr(
         "app.services.timeline_crypto.load_timeline_data",
-        lambda _key=None: TEST_TIMELINE,
+        lambda _key=None: timeline,
     )
+
+
+@pytest.fixture()
+def mini_timeline(monkeypatch):
+    """TEST ONLY — patch timeline loaders with a 2-event mini fixture."""
+    _patch_timeline(monkeypatch, TEST_TIMELINE_MINI)
+    return TEST_TIMELINE_MINI
+
+
+@pytest.fixture()
+def production_timeline(monkeypatch):
+    """Load the real encrypted production timeline (requires TIMELINE_DECRYPT_KEY)."""
+    from app.services.timeline_crypto import TIMELINE_ENC, decrypt_timeline_bytes
+
+    key = os.environ.get("TIMELINE_DECRYPT_KEY")
+    if not key:
+        pytest.skip("TIMELINE_DECRYPT_KEY required for production timeline tests")
+    if not TIMELINE_ENC.is_file():
+        pytest.skip("tradeverse_timeline.enc not found")
+    data = decrypt_timeline_bytes(key, TIMELINE_ENC.read_bytes())
+    _patch_timeline(monkeypatch, data)
+    return data
 
 
 def join_participant(
@@ -139,37 +161,6 @@ def client() -> TestClient:
         state.status = SimulationStatus.RUNNING
         db.commit()
         db.close()
-        yield test_client
-    app.dependency_overrides.clear()
-    Base.metadata.drop_all(bind=engine)
-    engine.dispose()
-    books.clear()
-    get_settings.cache_clear()
-
-
-@pytest.fixture()
-def event_client() -> TestClient:
-    os.environ["LOCAL_INSTANCE_MODE"] = "true"
-    os.environ["DEVELOPER_MODE"] = "false"
-    os.environ["PARTICIPANT_EVENT_MODE"] = "true"
-    os.environ["EVENT_PIN"] = "1234"
-    os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
-    get_settings.cache_clear()
-    books.clear()
-    engine = _make_memory_engine()
-    TestingSession = sessionmaker(bind=engine, autocommit=False, autoflush=False, future=True)
-    Base.metadata.create_all(bind=engine)
-    app = create_app()
-
-    def _override_db():
-        db = TestingSession()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = _override_db
-    with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=engine)

@@ -85,7 +85,7 @@ function mapPortfolioHoldings(
   }>,
 ): Portfolio["holdings"] {
   return (holdings ?? []).map((h) => ({
-    ticker: h.ticker,
+    ticker: h.ticker ?? null,
     quantity: h.quantity,
     avg_cost: h.avg_cost != null ? asMoney(h.avg_cost) : undefined,
     market_price: h.market_price != null ? asMoney(h.market_price) : undefined,
@@ -157,7 +157,7 @@ export default function TerminalPage() {
     [stocks, selectedId],
   );
 
-  const { priceSeries, chartLoading, handlePriceUpdate, handleMarketPulse, reloadCharts } =
+  const { priceSeries, chartLoading, handlePriceUpdate, handleMarketPulse } =
     usePriceChart(selectedId, selected?.last_traded_price);
 
   const displayWallet = useMemo(

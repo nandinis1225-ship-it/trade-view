@@ -4,8 +4,24 @@ $Root = if ($args[0]) { $args[0] } else { (Resolve-Path (Join-Path $PSScriptRoot
 $failures = @()
 
 $forbiddenPatterns = @(
-    "EUPHORIA",
+    "SUPABASE",
     "supabase.co",
+    "leaderboard",
+    "admin",
+    "developer",
+    "EUPHORIA",
+    "CRASH",
+    "RECOVERY",
+    "PHASE 1",
+    "PHASE 2",
+    "PHASE 3",
+    "PHASE 4",
+    "AI_TICK",
+    "MARKET_PULSE",
+    "sector_impacts",
+    "effective_impact",
+    "stop_loss",
+    "take_profit",
     "current_phase",
     "tradeverse_timeline.json",
     "Start now",
@@ -18,9 +34,11 @@ $forbiddenPatterns = @(
 $forbiddenDirs = @("admin", "market-screen", "developer")
 
 $scanPaths = @(
+    (Join-Path $Root "participant-build\ui"),
     (Join-Path $Root "frontend\out"),
     (Join-Path $Root "frontend\public\tradeverse-runtime.json"),
-    (Join-Path $Root ".env")
+    (Join-Path $Root "participant-build\.env"),
+    (Join-Path $Root "dist-package\.env")
 )
 
 foreach ($path in $scanPaths) {
@@ -36,7 +54,7 @@ foreach ($path in $scanPaths) {
             $content = Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue
             if (-not $content) { return }
             foreach ($pat in $forbiddenPatterns) {
-                if ($content -match $pat) {
+                if ($content -match [regex]::Escape($pat)) {
                     $failures += "$($_.FullName): contains '$pat'"
                 }
             }
@@ -44,7 +62,7 @@ foreach ($path in $scanPaths) {
     } else {
         $content = Get-Content $path -Raw
         foreach ($pat in $forbiddenPatterns) {
-            if ($content -match $pat) {
+            if ($content -match [regex]::Escape($pat)) {
                 $failures += "$path`: contains '$pat'"
             }
         }

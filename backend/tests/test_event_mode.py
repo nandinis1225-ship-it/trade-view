@@ -2,53 +2,9 @@
 
 from __future__ import annotations
 
-import os
-
-import pytest
 from fastapi.testclient import TestClient
 
-os.environ["LOCAL_INSTANCE_MODE"] = "true"
-os.environ["PARTICIPANT_EVENT_MODE"] = "true"
-os.environ["EVENT_PIN"] = "1234"
-os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
-
-from app.core.config import get_settings
-from tests.conftest import join_participant, _make_memory_engine
-import app.models  # noqa: F401
-from app.core.database import Base, get_db
-from app.exchange.book_registry import books
-from app.main import create_app
-from sqlalchemy.orm import sessionmaker
-
-
-@pytest.fixture()
-def event_client() -> TestClient:
-    os.environ["LOCAL_INSTANCE_MODE"] = "true"
-    os.environ["PARTICIPANT_EVENT_MODE"] = "true"
-    os.environ["EVENT_PIN"] = "1234"
-    os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
-    get_settings.cache_clear()
-    books.clear()
-    engine = _make_memory_engine()
-    TestingSession = sessionmaker(bind=engine, autocommit=False, autoflush=False, future=True)
-    Base.metadata.create_all(bind=engine)
-    app = create_app()
-
-    def _override_db():
-        db = TestingSession()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = _override_db
-    with TestClient(app) as test_client:
-        yield test_client
-    app.dependency_overrides.clear()
-    Base.metadata.drop_all(bind=engine)
-    engine.dispose()
-    books.clear()
-    get_settings.cache_clear()
+from tests.conftest import join_participant
 
 
 def test_validate_pin_accepts_correct(event_client: TestClient):
