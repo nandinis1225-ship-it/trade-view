@@ -1,4 +1,4 @@
-# Builds browser-based TRADEVERSE participant package (Windows - no Tauri)
+﻿# Builds browser-based TRADEVERSE participant package (Windows - no Tauri)
 param(
     [Parameter(Mandatory = $true)]
     [string]$EventPin,
@@ -16,7 +16,7 @@ $LaunchersDir = Join-Path $PSScriptRoot "launchers"
 $TimelineJson = Join-Path $BackendDir "app\seed\tradeverse_timeline.json"
 
 if (-not (Test-Path $TimelineJson)) {
-    throw "Production timeline missing: $TimelineJson (required, $TimelineEvents events)"
+    throw "Production timeline missing: $TimelineJson (required, $($TimelineEvents) events)"
 }
 
 if (-not $SkipRehearsal) {
@@ -24,11 +24,13 @@ if (-not $SkipRehearsal) {
     if (Test-Path $rehearsal) {
         Write-Host "Running developer rehearsal gate..."
         & $rehearsal
-        if ($LASTEXITCODE -ne 0) { throw "developer rehearsal failed - use -SkipRehearsal to override" }
+        if ($LASTEXITCODE -ne 0) {
+            throw 'developer rehearsal failed. Re-run with -SkipRehearsal to override.'
+        }
     }
 }
 
-Write-Host "Protecting production timeline ($TimelineEvents events)..."
+Write-Host "Protecting production timeline ($($TimelineEvents) events)..."
 Push-Location $BackendDir
 python scripts/protect_timeline.py --events $TimelineEvents
 if ($LASTEXITCODE -ne 0) { throw "protect_timeline.py failed" }

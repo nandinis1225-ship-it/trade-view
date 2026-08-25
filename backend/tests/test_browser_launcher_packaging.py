@@ -40,9 +40,14 @@ def test_launcher_templates_exist():
 
 def test_browser_build_script_is_ascii_only():
     ps1 = REPO_ROOT / "scripts/offline/Build-Browser-Participant.ps1"
-    text = ps1.read_text(encoding="utf-8")
+    raw = ps1.read_bytes()
+    # Allow UTF-8 BOM for Windows PowerShell 5.1
+    if raw.startswith(b"\xef\xbb\xbf"):
+        raw = raw[3:]
+    text = raw.decode("utf-8")
     assert all(ord(c) < 128 for c in text), "Build-Browser-Participant.ps1 must be ASCII-only for Windows PowerShell 5.1"
     assert "\u2014" not in text, "em dash breaks Windows PowerShell without UTF-8 BOM"
+    assert text.startswith("# Builds browser-based"), "expected UTF-8 BOM + CRLF script header"
 
 
 def test_browser_build_scripts_exist():
