@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
-import { apiGet } from "@/lib/api";
+import { apiGet } from "@/lib/participant-api";
 import { num } from "@/lib/marketFormat";
 
 export type PricePoint = { t: string; px: number; i: number };

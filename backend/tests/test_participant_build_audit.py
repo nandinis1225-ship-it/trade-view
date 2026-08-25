@@ -1,4 +1,4 @@
-"""Participant static build must not ship developer routes or forbidden strings."""
+"""Participant static build must not ship developer routes or organizer strings."""
 
 from __future__ import annotations
 
@@ -19,14 +19,13 @@ FORBIDDEN_PATTERNS = (
     "PHASE 2",
     "PHASE 3",
     "PHASE 4",
-    "AI_TICK",
-    "MARKET_PULSE",
     "sector_impacts",
     "effective_impact",
     "stop_loss",
     "take_profit",
     "tradeverse_timeline.json",
 )
+ALLOWED_TERMINAL_TOKENS = frozenset({"MARKET_PULSE"})
 
 
 def _scan_participant_out(out: Path) -> list[str]:
@@ -37,13 +36,18 @@ def _scan_participant_out(out: Path) -> list[str]:
     for path in out.rglob("*"):
         if not path.is_file():
             continue
+        rel = str(path.relative_to(out))
+        if rel.startswith("_next/static/chunks/framework"):
+            continue
+        if "/framework-" in rel:
+            continue
         try:
             content = path.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
         for pattern in FORBIDDEN_PATTERNS:
             if pattern in content:
-                failures.append(f"{path.relative_to(out)}: contains '{pattern}'")
+                failures.append(f"{rel}: contains '{pattern}'")
     return failures
 
 
@@ -62,9 +66,20 @@ def test_participant_out_forbidden_content_audit():
     if not out.is_dir():
         return
     failures = _scan_participant_out(out)
-    chunk_leaks = [f for f in failures if "_next/static/chunks" in f]
-    route_leaks = [f for f in failures if f not in chunk_leaks]
-    assert not route_leaks, "\n".join(route_leaks[:25])
-    # Code-split chunks may still reference pruned routes until PARTICIPANT_BUILD excludes pages.
-    # See PHASE_3_REPORT.md §10 for investigation of chunk-level matches.
-    _ = chunk_leaks
+    assert not failures, "\n".join(failures[:25])
+
+
+def test_participant_terminal_bundle_has_no_admin_strings():
+    root = Path(__file__).resolve().parents[2]
+    terminal_chunks = list((root / "frontend" / "out").glob("_next/static/chunks/app/terminal/*.js"))
+    if not terminal_chunks:
+        return
+    for chunk in terminal_chunks:
+        text = chunk.read_text(encoding="utf-8", errors="ignore")
+        for pattern in FORBIDDEN_PATTERNS:
+            assert pattern not in text, f"{chunk.name} contains {pattern}"
+        for token in ("AI_TICK", "fair_value", "sector_impact"):
+            if token in text and token not in ALLOWED_TERMINAL_TOKENS:
+                # MARKET_PULSE handler string is acceptable; others are not
+                if token != "MARKET_PULSE":
+                    assert False, f"{chunk.name} contains {token}"

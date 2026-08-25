@@ -27,7 +27,7 @@ import {
   joinSession,
   startLocalSimulation,
   validateEventPin,
-} from "@/lib/api";
+} from "@/lib/participant-api";
 import { isAuthError } from "@/lib/runtimeConfig";
 import {
   markWalletToMarket,

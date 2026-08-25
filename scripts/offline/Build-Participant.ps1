@@ -27,15 +27,9 @@ if (-not $SkipRehearsal) {
 Write-Host "Building participant frontend..."
 Push-Location $FrontendDir
 if (-not (Test-Path "node_modules")) { npm install }
-$env:PARTICIPANT_BUILD = "1"
-npm run build
+npm run build:participant
 if ($LASTEXITCODE -ne 0) { throw "frontend build failed" }
 Pop-Location
-
-foreach ($dir in @("admin", "market-screen", "developer")) {
-    $target = Join-Path $FrontendDir "out\$dir"
-    if (Test-Path $target) { Remove-Item $target -Recurse -Force }
-}
 
 Write-Host "Baking timeline and participant .env..."
 $envOut = Join-Path $Root "dist-package\.env"

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { wsUrl } from "@/lib/api";
+import { wsUrl } from "@/lib/participant-api";
 
 export type WsMessage = { event: string; payload?: Record<string, unknown> } & Record<string, unknown>;
 
