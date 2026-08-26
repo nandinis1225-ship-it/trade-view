@@ -57,9 +57,9 @@ Desktop.ini
 postgres_data/
 *.sqlite3
 backups/*.sql
-nginx/certs/*.pem
-nginx/certs/*.key
-!nginx/certs/.gitkeep
+legacy/cloud-deploy/nginx/certs/*.pem
+legacy/cloud-deploy/nginx/certs/*.key
+!legacy/cloud-deploy/nginx/certs/.gitkeep
 !backups/.gitkeep
 
 # Misc

@@ -2,62 +2,47 @@
 
 **Date:** 2026-08-26  
 **Branch:** `cursor/browser-launcher-9965`  
-**Verdict:** **NOT EVENT READY** — production `tradeverse_timeline.pkg` not yet generated on this machine (requires organizer `TIMELINE_DECRYPT_KEY`)
+**Verdict:** **NOT EVENT READY** — `tradeverse_timeline.pkg` not generated (requires organizer `TIMELINE_DECRYPT_KEY`); Windows PyInstaller participant binary not built on this Linux VM
 
 ---
 
-## WORKING
+## Validation summary (this pass)
 
-| Area | Status |
-|------|--------|
-| Browser launcher flow (`Start-Tradeverse.bat` / `.command`) | Verified in source + tests |
-| FastAPI backend on `127.0.0.1:8765` | Packaged bind guard tested |
-| Participant terminal UI (name → PIN → countdown → trade → P&L) | Frontend builds pass |
-| Projector UI with `market_change_pct` | Frontend builds pass |
-| Simulation clock + recovery replay | `test_recovery.py` passes |
-| News + cross-sector propagation | `test_cross_sector_news.py` 9/9 |
-| AI traders (7 archetypes via order gateway) | `test_exchange.py`, `test_seed_ai_agents` |
-| IPO lifecycle | `test_feature_layers.py`, phase 3 validation |
-| Dissolution | `test_dissolution.py` |
-| Participant privacy / event mode | `test_participant_privacy.py`, `test_event_mode.py` |
-| Timeline bootstrap from committed `.enc` | `ensure_production_timeline_pkg.py` + manifest |
-| Phase 5 gates | **PASSED** |
-| Full backend pytest | **161 passed**, 13 skipped, 0 failed |
+| # | Check | Result |
+|---|-------|--------|
+| 1 | Full backend pytest | **161 passed, 0 failed, 16 skipped** (177 collected) |
+| 2 | Frontend TypeScript (`npx tsc --noEmit`) | **PASS** |
+| 3 | Participant production build (`npm run build:participant`) | **PASS** |
+| 4 | Projector production build (`npm run build:projector`) | **PASS** |
+| 5 | Production timeline validation (64 events) | **MANIFEST OK** — `.enc` present (67492 bytes, SHA256 matches manifest); `.pkg` **missing** (cannot decrypt without key) |
+| 6 | Browser launcher packaging tests | **15 passed, 1 skipped** (production timeline) |
+| 7 | Recovery tests | **3/3 pass** |
+| 8 | Participant privacy + event mode | **12/12 pass** |
+| 9 | Cross-sector news tests | **9/9 pass** |
+| 10 | IPO tests | **3/3 pass** |
+| 11 | Dissolution tests | **1/1 pass** |
+| 12 | Participant build audit | **4/4 pass** when `frontend/out/terminal` present (2 skip in full suite if last build was projector-only) |
+| 13 | PowerShell AST parse (12 offline/dev `.ps1` scripts) | **PARSE_OK** (via `pwsh` `[Parser]::ParseFile`) |
+| 14 | External/local absolute paths | **None** in build scripts (only test assertions) |
+| 15 | Participant `out/` forbidden content scan | **CLEAN** — no plaintext timeline, decrypt key, dev DB, Supabase, or Railway strings |
+| 16 | Participant build prerequisites | **PASS** — ensure script, build PS1, universe JSON, PyInstaller spec, launchers present |
+| 17 | End-to-end production rehearsal | **3 skipped** — requires `tradeverse_timeline.pkg` |
 
----
+**Phase 5 gates:** **PASSED** (pytest subset, frontend lint/build/tsc, static audits, accelerated developer rehearsal at 60×)
 
-## FIXED (this pass)
-
-- Autouse `mini_timeline` fixture for unit tests without production `.pkg`
-- Test pollution from `test_packaged_backend_rejects_public_bind` leaving `ENVIRONMENT=production`
-- Stale test expectations (`default_starting_capital` 500000, direct-fill order gateway)
-- `test_offline_local.py` refactored to use shared `db_session` fixture
-- `Build-Projector.ps1` — removed broken `$BakedTimeline`, uses ensure script
-- `PROJECTOR_MODE` wired in config + root redirect to `/projector`
-- `Start-Tradeverse-Projector.bat` launcher added
-- Phase reports archived to `docs/archive/`
-- README rewritten for browser-local event path
+**Frontend lint:** **PASS**
 
 ---
 
-## TEST RESULTS
+## Tests run
 
 ### Full backend pytest
 
-| Result | Count |
-|--------|-------|
-| Passed | 161 |
-| Failed | 0 |
-| Skipped | 13 |
-| Errors | 0 |
+```
+177 collected → 161 passed, 0 failed, 0 errors, 16 skipped
+```
 
-**Skipped (13)** — all require `tradeverse_timeline.pkg` or `TIMELINE_DECRYPT_KEY`:
-
-- `test_production_timeline_*` (11 tests across simulation_control, timeline_integration, phase35, phase3_validation, browser_launcher)
-- `test_ensure_script_bootstraps_pkg_from_enc`
-- `test_projector_out_*` (2) — projector `out/` not present until `npm run build:projector` (now built)
-
-### Targeted suites
+### Targeted suites (explicit user checklist)
 
 | Suite | Result |
 |-------|--------|
@@ -66,111 +51,103 @@
 | `test_event_mode.py` | 6/6 pass |
 | `test_cross_sector_news.py` | 9/9 pass |
 | `test_dissolution.py` | 1/1 pass |
-| `test_browser_launcher_packaging.py` | 15/16 pass, 1 skip |
-| `test_production_timeline_bootstrap.py` | 8/9 pass, 1 skip |
-| `test_phase35_packaging.py` | 9/10 pass, 1 skip |
-| `test_event_e2e_rehearsal.py` | 3 skip (no `.pkg`) |
+| `test_feature_layers.py` + `test_phase3_validation.py` (IPO) | 3/3 pass |
+| `test_browser_launcher_packaging.py` | 15 pass, 1 skip |
+| `test_participant_build_audit.py` | 4 pass (after participant build) |
+| `test_projector_build_audit.py` | 3/3 pass |
+| `test_production_timeline_bootstrap.py` | 8 pass, 1 skip |
+| `test_event_e2e_rehearsal.py` | 3 skip |
 
-### Phase 5 gates
+### Skipped tests (16) — why
 
-**PASSED** — backend pytest subset, frontend lint/build/tsc, static audits, accelerated rehearsal.
+All skips are expected without organizer secrets or a Windows build host:
 
-### Frontend
+| Reason | Count | Tests |
+|--------|-------|-------|
+| No `tradeverse_timeline.pkg` / no `TIMELINE_DECRYPT_KEY` | 13 | `test_simulation_control` (4), `test_timeline_integration` (3), `test_phase3_validation` (1), `test_phase35_packaging` (1), `test_browser_launcher_packaging` (1), `test_production_timeline_bootstrap` (1), `test_event_e2e_rehearsal` (3) |
+| Mixed/missing participant `out/` during full suite | 2 | `test_participant_build_audit` (2) — pass when `npm run build:participant` is the last frontend build |
 
-| Check | Result |
-|-------|--------|
-| `npm run lint` | PASS |
-| `npm run build:participant` | PASS |
-| `npm run build:projector` | PASS |
-| `npx tsc --noEmit` | PASS |
-
-### PowerShell 5.1 AST parse
-
-All offline packaging scripts: **PARSE_OK**
-
-- `Build-Browser-Participant.ps1`
-- `Build-Projector.ps1`
-- `Build-Participant.ps1` (legacy Tauri)
-- `audit-browser-participant-build.ps1`
-- `audit-participant-build.ps1`
-- `run-event-rehearsal.ps1`
-- `ensure-env.ps1`
-- `build-share-package.ps1`
-- `encrypt-timeline.ps1`
-
-### External path search
-
-No `C:\Users\...`, `mock market simulation`, or other external local project paths in build scripts.
-
-### Participant package privacy (audit patterns)
-
-Verified by tests — participant package must not contain:
-
-- Plaintext `tradeverse_timeline.json`
-- `TIMELINE_DECRYPT_KEY`
-- `mse_dev.db`
-- Supabase / Railway runtime dependencies
+No tests were disabled or removed to achieve green results.
 
 ---
 
-## BUILD RESULTS
+## Builds passed / failed
 
 | Build | Platform | Result |
 |-------|----------|--------|
-| Participant frontend | Linux (CI) | PASS |
-| Projector frontend | Linux (CI) | PASS |
-| Backend PyInstaller `.exe` | Windows | **Not run** (requires Windows build host) |
-| Participant package assembly | Windows | **Not run** (requires Windows + `.pkg` + `EVENT_PIN`) |
+| Participant frontend (`npm run build:participant`) | Linux VM | **PASS** |
+| Projector frontend (`npm run build:projector`) | Linux VM | **PASS** |
+| TypeScript check | Linux VM | **PASS** |
+| ESLint | Linux VM | **PASS** |
+| Backend PyInstaller `tradeverse-backend.exe` | Windows | **Not run** — requires Windows organizer host |
+| Full participant package assembly | Windows | **Not run** — requires Windows + `.pkg` + `EVENT_PIN` |
 
 ---
 
-## AI TRADER STATUS
+## PowerShell 5.1 AST parsing
 
-**Pipeline:** `AI strategy.decide()` → `order_service.submit_order()` → exchange house fill → LTP update
+All relevant scripts parse cleanly:
 
-**Archetypes (7):** `market_maker`, `momentum`, `mean_reversion`, `value_investor`, `fomo`, `panic`, `noise`
-
-**Information used:** public LTP, released news pressure, fair_value targets (internal), book state — **not** future timeline events
-
-**Tick frequency:** every 30 simulation seconds (engine-integrated); recovery replays missed ticks chronologically
-
-**Participant exposure:** `AI_TICK`, `MARKET_PULSE`, `LEADERBOARD_UPDATE` suppressed in event mode WebSocket
-
-**Note:** Participant human orders use direct-fill at LTP (simplified terminal UX). AI agents use the same order gateway.
-
----
-
-## SECURITY / PRIVACY
-
-Verified by `test_participant_privacy.py` and packaging audits:
-
-- No `fair_value` in participant stock API (masked as LTP)
-- News API returns only released fields
-- No future timeline / checkpoint data in participant bootstrap
-- No leaderboard in event mode
-- PIN stored as hash in participant `.env`
-- Timeline decrypt key never shipped to participants
+- `scripts/offline/Build-Browser-Participant.ps1`
+- `scripts/offline/Build-Projector.ps1`
+- `scripts/offline/Build-Participant.ps1` (legacy Tauri, frozen)
+- `scripts/offline/audit-browser-participant-build.ps1`
+- `scripts/offline/audit-participant-build.ps1`
+- `scripts/dev/run-event-rehearsal.ps1`
+- `legacy/offline-scripts/ensure-env.ps1`
+- `legacy/offline-scripts/build-share-package.ps1`
+- `legacy/offline-scripts/encrypt-timeline.ps1`
+- `legacy/offline-scripts/start-participant.ps1`
+- `legacy/offline-scripts/start-organizer.ps1`
+- `legacy/offline-scripts/start-developer.ps1`
 
 ---
 
-## REMAINING BLOCKERS
+## Privacy / package audit
 
-1. **`tradeverse_timeline.pkg` not generated** — requires organizer `TIMELINE_DECRYPT_KEY` on build machine:
+Verified by tests and `rg` scan of `frontend/out/` after participant build:
+
+- No plaintext `tradeverse_timeline.json`
+- No `TIMELINE_DECRYPT_KEY`
+- No `mse_dev.db`
+- No `supabase.co` / Railway runtime strings in static output
+
+---
+
+## Repo cleanup (this pass)
+
+Obsolete cloud/LAN/Tauri-adjacent artifacts moved under `legacy/`:
+
+- `legacy/cloud-deploy/` — Docker Compose, Nginx, Supabase, OCI/local scripts, deploy docs
+- `legacy/launchers/` — pre-browser `Start-TRADEVERSE*.bat`
+- `legacy/offline-scripts/` — Python-on-PATH starters, share-package builder
+- `legacy/leaderboard-collector/` — Supabase sidecar
+- `docs/archive/legacy/` — superseded guides (`FINAL_EVENT_GUIDE`, `PHASE_3_5_*`, etc.)
+
+**Active docs:** `README.md`, `docs/BUILD_GUIDE.md`, `docs/BROWSER_EVENT_GUIDE.md`, `docs/RECOVERY_GUIDE.md`
+
+**Frozen in place:** `desktop/`, `scripts/offline/Build-Participant.ps1`
+
+---
+
+## Remaining blockers
+
+1. **Generate `backend/app/seed/tradeverse_timeline.pkg`** (one-time, organizer machine):
 
    ```powershell
-   $env:TIMELINE_DECRYPT_KEY = "<key>"
+   $env:TIMELINE_DECRYPT_KEY = "<organizer-key>"
    cd backend
    python scripts/ensure_production_timeline_pkg.py --events 64
-   git add backend/app/seed/tradeverse_timeline.pkg
+   git add app/seed/tradeverse_timeline.pkg
    ```
 
-2. **Windows PyInstaller participant package** — must be built on organizer Windows machine (cannot run on Linux CI VM).
+2. **Build Windows participant package** on organizer Windows laptop (PyInstaller sidecar + audit).
 
-3. **13 production-timeline tests skipped** until `.pkg` is committed.
+3. **16 production-timeline / E2E tests** will run once `.pkg` is committed.
 
 ---
 
-## BUILD COMMANDS
+## Exact build commands
 
 ### Windows participant (final)
 
@@ -199,19 +176,20 @@ cd <repo-root>
 
 ---
 
-## BROWSER PARTICIPANT PACKAGING READINESS
+## Browser participant packaging readiness
 
 | Criterion | Ready? |
 |-----------|--------|
-| Source code + tests | Yes |
-| Launcher scripts | Yes |
-| Frontend production build | Yes |
-| Timeline `.enc` in repo | Yes |
-| Timeline `.pkg` for PyInstaller embed | **No** — needs decrypt key once |
-| Windows `.exe` sidecar built | **No** — needs Windows host |
-| End-to-end production rehearsal | **Skipped** — needs `.pkg` |
+| Source code + tests | **Yes** — 161/161 runnable tests pass |
+| Launcher scripts (`Start-Tradeverse.bat`) | **Yes** |
+| Frontend production builds | **Yes** |
+| Timeline `.enc` + manifest (64 events) | **Yes** |
+| Timeline `.pkg` for PyInstaller embed | **No** — needs `TIMELINE_DECRYPT_KEY` once |
+| Windows `tradeverse-backend.exe` built | **No** — needs Windows host |
+| Production E2E rehearsal | **No** — needs `.pkg` |
+| Repo layout for browser framework | **Yes** — legacy artifacts archived |
 
-**The browser participant is source-ready and test-green, but NOT ready for final packaging until `tradeverse_timeline.pkg` is generated and the Windows PyInstaller build is run on the organizer machine.**
+**The browser participant is source-ready and validation-green on Linux, but NOT ready for final Windows packaging until `tradeverse_timeline.pkg` is generated and PyInstaller is run on the organizer machine.**
 
 ---
 
@@ -219,4 +197,4 @@ cd <repo-root>
 
 **NOT EVENT READY**
 
-Evidence supports a working simulation stack and browser launcher architecture, but the production timeline protected package has not been generated in this environment and the final Windows participant binary has not been built here.
+Evidence: simulation stack, privacy gates, recovery, news/IPO/dissolution paths, and browser launcher architecture all validate. Production timeline protected package has not been generated in this environment (no decrypt key), and the final Windows participant binary has not been built here.

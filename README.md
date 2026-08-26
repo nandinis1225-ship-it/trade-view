@@ -59,4 +59,4 @@ bash scripts/dev/run-phase5-gates.sh
 
 ## Legacy
 
-Tauri desktop packaging scripts remain for future use but are **not** the event critical path. Historical phase reports are in `docs/archive/`.
+Older cloud/LAN/Tauri distribution artifacts are under [`legacy/`](legacy/README.md) (Docker, Supabase, pre-browser launchers). They are **not** used for browser-local events. Historical phase reports are in `docs/archive/`.
