@@ -50,6 +50,18 @@ def _patch_timeline(monkeypatch, timeline: dict[str, Any]) -> None:
         "app.services.timeline_crypto.load_timeline_data",
         lambda _key=None: timeline,
     )
+    monkeypatch.setattr(
+        "app.services.timeline_protection.load_timeline_data",
+        lambda: timeline,
+    )
+
+
+@pytest.fixture(autouse=True)
+def _autouse_mini_timeline_for_tests(request, monkeypatch):
+    """Patch timeline loaders unless a test explicitly uses production_timeline."""
+    if "production_timeline" in request.fixturenames:
+        return
+    _patch_timeline(monkeypatch, TEST_TIMELINE_MINI)
 
 
 @pytest.fixture()
@@ -146,6 +158,7 @@ def db_session() -> Session:
 def client() -> TestClient:
     os.environ["DEVELOPER_MODE"] = "true"
     os.environ["PARTICIPANT_EVENT_MODE"] = "false"
+    os.environ["ENVIRONMENT"] = "development"
     get_settings.cache_clear()
     books.clear()
     engine = _make_memory_engine()

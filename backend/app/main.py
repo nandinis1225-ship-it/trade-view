@@ -128,7 +128,8 @@ def create_app() -> FastAPI:
         if static_dir is not None:
             @app.get("/")
             def root_redirect():
-                return RedirectResponse(url="/terminal", status_code=302)
+                target = "/projector" if settings.projector_mode else "/terminal"
+                return RedirectResponse(url=target, status_code=302)
 
             app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static-ui")
     else:

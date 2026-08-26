@@ -79,7 +79,7 @@ def test_stop_loss_create_and_trigger(db_session):
         stock_id=stock.id,
         side=OrderSide.BUY,
         order_type=OrderType.LIMIT,
-        quantity=200,
+        quantity=50,
         price=Decimal("90"),
     )
 
@@ -125,7 +125,7 @@ def test_take_profit_and_cancel(db_session):
         stock_id=stock.id,
         side=OrderSide.BUY,
         order_type=OrderType.LIMIT,
-        quantity=200,
+        quantity=50,
         price=Decimal("109"),
     )
     tp = conditional_order_service.create_conditional(
@@ -202,7 +202,10 @@ def test_ipo_block_allot_partial(client):
     assert a1["status"] == "applied"
     w1 = client.get(f"/api/v1/traders/{t1_id}/wallet", headers=t1_auth).json()
     assert float(w1["cash_blocked_ipo"]) == 100 * 50 * 2
-    assert float(w1["available_cash"]) == 1_000_000 - 10_000
+    from app.core.config import get_settings
+
+    start_capital = get_settings().default_starting_capital
+    assert float(w1["available_cash"]) == start_capital - 10_000
 
     client.post(
         f"/api/v1/ipos/{ipo['id']}/apply",

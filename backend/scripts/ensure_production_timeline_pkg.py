@@ -30,6 +30,7 @@ from app.services.timeline_protection import (
     protect_timeline_bytes,
     protect_timeline_json,
 )
+from app.services.timeline_service import validate_timeline
 
 MANIFEST_PATH = Path(__file__).resolve().parents[1] / "app" / "seed" / "timeline_manifest.json"
 DEFAULT_EVENT_COUNT = 64
@@ -48,6 +49,13 @@ def _validate_event_count(data: dict, expected_events: int) -> None:
         raise ValueError("timeline.events must be a list")
     if len(events) != expected_events:
         raise ValueError(f"expected {expected_events} timeline events, found {len(events)}")
+
+
+def _validate_timeline_data(data: dict, expected_events: int) -> None:
+    _validate_event_count(data, expected_events)
+    errors = validate_timeline(data)
+    if errors:
+        raise ValueError("production timeline validation failed: " + "; ".join(errors))
 
 
 def _validate_enc_artifact() -> None:
@@ -73,7 +81,7 @@ def validate_protected_package(
     if not pkg.is_file():
         raise FileNotFoundError(f"protected timeline package not found: {pkg}")
     data = load_protected_timeline(pkg)
-    _validate_event_count(data, expected_events)
+    _validate_timeline_data(data, expected_events)
     return data
 
 
@@ -97,7 +105,7 @@ def ensure_production_timeline_pkg(
     key = os.environ.get("TIMELINE_DECRYPT_KEY", "").strip()
     if key:
         data = decrypt_timeline_bytes(key, TIMELINE_ENC.read_bytes())
-        _validate_event_count(data, expected_events)
+        _validate_timeline_data(data, expected_events)
         plaintext = json.dumps(data, ensure_ascii=False).encode("utf-8")
         TIMELINE_PKG.write_bytes(protect_timeline_bytes(plaintext))
         validate_protected_package(TIMELINE_PKG, expected_events=expected_events)

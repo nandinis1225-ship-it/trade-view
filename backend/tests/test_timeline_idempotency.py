@@ -8,8 +8,8 @@ from app.services.simulation_controller import reset_simulation, start_simulatio
 def test_executed_timeline_event_not_replayed(db_session):
     reset_simulation(db_session)
     start_simulation(db_session)
-    # First checkpoint is at 00:03 (180 sim-seconds)
-    first = process_due_events(db_session, 180.0)
+    # First checkpoint in mini timeline is at 00:01 (60 sim-seconds).
+    first = process_due_events(db_session, 60.0)
     assert first, "expected at least one due event at t=180"
     checkpoint_id = first[0]["checkpoint_id"]
 
@@ -18,6 +18,6 @@ def test_executed_timeline_event_not_replayed(db_session):
     event = db_session.query(TimelineEvent).filter(TimelineEvent.checkpoint_id == checkpoint_id).one()
     assert event.status == TimelineEventStatus.EXECUTED
 
-    second = process_due_events(db_session, 180.0)
+    second = process_due_events(db_session, 60.0)
     replayed = [r for r in second if r.get("checkpoint_id") == checkpoint_id]
     assert not replayed

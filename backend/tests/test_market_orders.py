@@ -46,7 +46,7 @@ def test_market_buy_executes_with_seeded_liquidity(db_session):
 
     portfolio = portfolio_service.get_portfolio(db_session, buyer.id)
     assert portfolio.holdings[0].quantity == 10
-    assert portfolio.cash < Decimal("1000000")
+    assert portfolio.cash < Decimal("500000")
 
 
 def test_market_buy_provisions_liquidity_on_empty_book(db_session):

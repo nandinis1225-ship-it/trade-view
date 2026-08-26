@@ -81,6 +81,5 @@ debug-*.log
 # Timeline spoilers (ship encrypted .enc only)
 backend/app/seed/tradeverse_timeline.json
 **/tradeverse_timeline.json
-backend/app/seed/tradeverse_timeline.pkg
 **/tradeverse_timeline.baked.json
 *.docx

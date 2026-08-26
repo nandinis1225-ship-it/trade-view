@@ -72,6 +72,7 @@ class Settings(BaseSettings):
     local_instance_mode: bool = Field(default=False, validation_alias="LOCAL_INSTANCE_MODE")
     developer_mode: bool = Field(default=False, validation_alias="DEVELOPER_MODE")
     participant_event_mode: bool = Field(default=False, validation_alias="PARTICIPANT_EVENT_MODE")
+    projector_mode: bool = Field(default=False, validation_alias="PROJECTOR_MODE")
     event_pin: str = Field(default="", validation_alias="EVENT_PIN")
     event_pin_hash: str = Field(default="", validation_alias="EVENT_PIN_HASH")
     event_pin_salt: str = Field(default="", validation_alias="EVENT_PIN_SALT")

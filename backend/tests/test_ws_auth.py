@@ -19,9 +19,10 @@ def test_anonymous_ws_connects_public(client):
         assert msg["payload"]["authenticated"] is False
 
 
-def test_order_requires_auth(client):
+def test_order_requires_auth(client, mini_timeline):
     client.post("/api/v1/admin/simulation/reset")
     stocks = client.get("/api/v1/stocks").json()
+    assert stocks, "expected stocks after reset/bootstrap"
     res = client.post(
         "/api/v1/orders",
         json={

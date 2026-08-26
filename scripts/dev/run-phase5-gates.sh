@@ -27,6 +27,7 @@ if ! "$VENV_PY" -m pytest \
   tests/test_projector_build_audit.py \
   tests/test_phase35_packaging.py \
   tests/test_production_timeline_bootstrap.py \
+  tests/test_event_e2e_rehearsal.py \
   tests/test_browser_launcher_packaging.py \
   -q; then
   FAIL=1

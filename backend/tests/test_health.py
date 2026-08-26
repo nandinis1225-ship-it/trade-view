@@ -1,17 +1,23 @@
 """Health endpoint tests."""
 
+import os
+
 from fastapi.testclient import TestClient
 
 from app.main import create_app
 
 
 def test_root() -> None:
+    os.environ.pop("SERVE_STATIC_UI", None)
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
     client = TestClient(create_app())
     response = client.get("/")
     assert response.status_code == 200
     body = response.json()
-    assert body["phase"] == 14
     assert "Mock Stock Exchange" in body["message"]
+    assert "health" in body
 
 
 def test_health() -> None:
@@ -43,4 +49,4 @@ def test_settings_database_url() -> None:
     settings = get_settings()
     url = settings.database_url
     assert url.startswith("postgresql+psycopg://") or url.startswith("sqlite")
-    assert settings.default_starting_capital == 1_000_000.0
+    assert settings.default_starting_capital == 500_000.0

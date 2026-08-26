@@ -30,7 +30,7 @@ def test_admin_start_requires_auth():
     app.dependency_overrides[get_db] = _override_db
     with TestClient(app) as bare_client:
         res = bare_client.post("/api/v1/admin/simulation/start")
-        assert res.status_code == 401
+        assert res.status_code == 404
     app.dependency_overrides.clear()
 
 

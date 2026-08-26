@@ -5,7 +5,12 @@ from decimal import Decimal
 from app.schemas import HoldingAdjust, StockCreate, TraderCreate
 from app.seed.stocks import seed_default_stocks
 from app.services import portfolio_service, stock_service, trader_service
+from app.core.config import get_settings
 from tests.conftest import join_participant
+
+
+def _default_cash() -> str:
+    return f"{get_settings().default_starting_capital:.2f}"
 from app.models.enums import (
     FundamentalProfile,
     LiquidityClass,
@@ -33,8 +38,8 @@ def test_create_two_traders_and_one_stock(db_session) -> None:
     )
 
     assert a.id != b.id
-    assert a.cash == Decimal("1000000.00")
-    assert b.cash == Decimal("1000000.00")
+    assert a.cash == Decimal(_default_cash())
+    assert b.cash == Decimal(_default_cash())
     assert stock.ticker == "TECHNOVA"
     assert stock.last_traded_price == Decimal("100")
     assert stock.fair_value == Decimal("105")
@@ -61,11 +66,11 @@ def test_cash_and_holdings_tracked(db_session) -> None:
     )
 
     portfolio = portfolio_service.get_portfolio(db_session, trader.id)
-    assert portfolio.cash == Decimal("1000000.00")
+    assert portfolio.cash == Decimal(_default_cash())
     assert len(portfolio.holdings) == 1
     assert portfolio.holdings[0].quantity == 100
     assert portfolio.holdings_value == Decimal("20000")
-    assert portfolio.portfolio_value == Decimal("1020000.00")
+    assert portfolio.portfolio_value == Decimal(_default_cash()) + Decimal("20000")
     assert portfolio.unrealized_pnl == Decimal("0")
 
 
@@ -153,7 +158,7 @@ def test_api_create_traders_and_portfolio(client) -> None:
     assert body["holdings_value"] == "1000.0000" or Decimal(body["holdings_value"]) == Decimal(
         "1000"
     )
-    assert Decimal(body["portfolio_value"]) == Decimal("1001000.00")
+    assert Decimal(body["portfolio_value"]) == Decimal(_default_cash()) + Decimal("1000")
 
 
 def test_api_seed_stocks(client) -> None:

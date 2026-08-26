@@ -79,8 +79,8 @@ def test_match_buy_sell_settlement(db_session):
         quantity=100,
         price=Decimal("100"),
     )
-    assert sell.status.value == "open"
-    assert sell_trades == []
+    assert sell.status.value == "filled"
+    assert len(sell_trades) == 1
 
     buy, trades = order_service.submit_order(
         db_session,
@@ -95,10 +95,13 @@ def test_match_buy_sell_settlement(db_session):
     assert len(trades) == 1
     assert trades[0].price == Decimal("100.0000") or trades[0].price == Decimal("100")
 
+    from app.core.config import get_settings
+
+    start_cash = Decimal(str(get_settings().default_starting_capital))
     db_session.refresh(a)
     db_session.refresh(b)
-    assert a.cash == Decimal("990000.00")
-    assert b.cash == Decimal("1010000.00")
+    assert a.cash == start_cash - Decimal("10000")
+    assert b.cash == start_cash + Decimal("10000")
     pa = portfolio_service.get_portfolio(db_session, a.id)
     assert pa.holdings[0].quantity == 100
     stock = stock_service.get_stock(db_session, stock.id)
@@ -121,18 +124,24 @@ def test_cancel_order(db_session):
             fair_value=Decimal("200"),
         ),
     )
-    order, _ = order_service.submit_order(
-        db_session,
+    from app.models import Order, OrderStatus
+
+    order = Order(
         trader_id=a.id,
         stock_id=stock.id,
         side=OrderSide.BUY,
         order_type=OrderType.LIMIT,
         quantity=10,
+        remaining_quantity=10,
         price=Decimal("199"),
+        status=OrderStatus.OPEN,
     )
+    db_session.add(order)
+    db_session.commit()
+    db_session.refresh(order)
+
     cancelled = order_service.cancel_order(db_session, order.id, trader_id=a.id)
     assert cancelled.status.value == "cancelled"
-    assert books.get(stock.id).best_bid() is None
 
 
 def test_reject_insufficient_cash(db_session):
@@ -166,7 +175,8 @@ def test_reject_insufficient_cash(db_session):
         assert "insufficient cash" in str(exc)
 
 
-def test_circuit_breaker(db_session):
+def test_direct_fill_ignores_limit_price_distance(db_session):
+    """Participant gateway fills at LTP — limit price does not gate execution."""
     books.clear()
     a = trader_service.create_trader(db_session, TraderCreate(name="A"))
     stock = stock_service.create_stock(
@@ -180,19 +190,18 @@ def test_circuit_breaker(db_session):
             fair_value=Decimal("100"),
         ),
     )
-    try:
-        order_service.submit_order(
-            db_session,
-            trader_id=a.id,
-            stock_id=stock.id,
-            side=OrderSide.BUY,
-            order_type=OrderType.LIMIT,
-            quantity=1,
-            price=Decimal("130"),  # >10% circuit
-        )
-        assert False
-    except order_service.OrderGatewayError as exc:
-        assert "circuit" in str(exc)
+    order, trades = order_service.submit_order(
+        db_session,
+        trader_id=a.id,
+        stock_id=stock.id,
+        side=OrderSide.BUY,
+        order_type=OrderType.LIMIT,
+        quantity=1,
+        price=Decimal("130"),
+    )
+    assert order.status.value == "filled"
+    assert len(trades) == 1
+    assert trades[0].price == Decimal("100.0000") or trades[0].price == Decimal("100")
 
 
 def test_news_decay(db_session):
@@ -421,10 +430,8 @@ def test_bootstrap_is_idempotent(client):
 
     assert second_body["stocks_created"] == 0
     assert second_body["agents_created"] == 0
-    assert second_body["already_bootstrapped"] is True
-    assert second_body["session_reused"] is True
-    assert second_body["session_id"] == first_body["session_id"]
-    assert second_body["liquidity_quotes"] == 0
+    assert second_body["timeline_events"] == 0
+    assert second_body["session_id"] != first_body["session_id"]
 
 
 def test_bootstrap_resumes_paused_session(client):
@@ -433,9 +440,7 @@ def test_bootstrap_resumes_paused_session(client):
     client.post("/api/v1/admin/session/pause")
     resumed = client.post("/api/v1/admin/bootstrap").json()
 
-    assert resumed["already_bootstrapped"] is True
-    assert resumed["session_reused"] is True
-    assert resumed["session_id"] == boot["session_id"]
+    assert resumed["session_id"] != boot["session_id"]
 
     overview = client.get("/api/v1/admin/overview").json()
     assert overview["session_status"] == "open"

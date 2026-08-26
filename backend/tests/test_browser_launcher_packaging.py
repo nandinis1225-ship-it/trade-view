@@ -173,8 +173,10 @@ def test_browser_package_audit_passes_synthetic_package(tmp_path):
 
 def test_packaged_backend_rejects_public_bind(monkeypatch, tmp_path):
     monkeypatch.setenv("BACKEND_HOST", "0.0.0.0")
+    monkeypatch.setenv("ENVIRONMENT", "development")
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
+    monkeypatch.setattr("app.paths.configure_packaged_runtime", lambda: tmp_path)
 
     import run_backend
 

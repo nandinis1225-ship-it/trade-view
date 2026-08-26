@@ -2,35 +2,19 @@
 
 from __future__ import annotations
 
-import os
-import tempfile
 from decimal import Decimal
 
 import pytest
 from sqlalchemy import func, select
 
-os.environ["LOCAL_INSTANCE_MODE"] = "true"
-os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
-os.environ["AUTO_INIT_DB"] = "true"
-
-from app.core.config import get_settings
-from app.core.database import SessionLocal, init_db
 from app.models import Stock
 from app.services.ipo_service import allot_ipo_personal, apply_ipo, create_ipo, open_ipo
 from app.services.leaderboard_sync_service import build_snapshot_payload
 from app.services.market_pulse_service import run_market_pulse
-from app.services.simulation_controller import bootstrap_universe, start_simulation
+from app.services.simulation_controller import bootstrap_universe
 from app.services.trader_service import create_trader
 from app.schemas import TraderCreate
 from app.models.enums import TraderType
-
-
-@pytest.fixture()
-def db_session():
-    get_settings.cache_clear()
-    init_db()
-    with SessionLocal() as db:
-        yield db
 
 
 def test_universe_has_35_tradable_stocks(db_session):
