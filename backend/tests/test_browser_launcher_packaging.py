@@ -50,11 +50,26 @@ def test_browser_build_script_is_ascii_only():
     assert text.startswith("# Builds browser-based"), "expected UTF-8 BOM + CRLF script header"
 
 
+def test_browser_build_script_has_no_external_timeline_prerequisites():
+    ps1 = REPO_ROOT / "scripts/offline/Build-Browser-Participant.ps1"
+    raw = ps1.read_bytes()
+    if raw.startswith(b"\xef\xbb\xbf"):
+        raw = raw[3:]
+    text = raw.decode("utf-8")
+    assert "tradeverse_timeline.json" not in text
+    assert "mock market simulation" not in text.lower()
+    assert "ensure_production_timeline_pkg.py" in text
+    assert "$env:EVENT_PIN" in text
+
+
 def test_browser_build_scripts_exist():
     assert (REPO_ROOT / "scripts/offline/Build-Browser-Participant.ps1").is_file()
     assert (REPO_ROOT / "scripts/offline/build-browser-participant-macos.sh").is_file()
     assert (REPO_ROOT / "scripts/offline/audit-browser-participant-build.ps1").is_file()
     assert (REPO_ROOT / "scripts/offline/audit-browser-participant-build.sh").is_file()
+    assert (REPO_ROOT / "backend/scripts/ensure_production_timeline_pkg.py").is_file()
+    assert (REPO_ROOT / "backend/app/seed/tradeverse_timeline.enc").is_file()
+    assert (REPO_ROOT / "backend/app/seed/timeline_manifest.json").is_file()
 
 
 def test_packaged_env_binds_localhost(tmp_path):

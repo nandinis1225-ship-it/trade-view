@@ -1,7 +1,6 @@
 ﻿# Builds browser-based TRADEVERSE participant package (Windows - no Tauri)
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$EventPin,
+    [string]$EventPin = $env:EVENT_PIN,
     [int]$TimelineEvents = 64,
     [switch]$SkipRehearsal,
     [switch]$SkipPyInstaller
@@ -13,10 +12,9 @@ $OutDir = Join-Path $Root "participant-build\windows\TRADEVERSE"
 $FrontendDir = Join-Path $Root "frontend"
 $BackendDir = Join-Path $Root "backend"
 $LaunchersDir = Join-Path $PSScriptRoot "launchers"
-$TimelineJson = Join-Path $BackendDir "app\seed\tradeverse_timeline.json"
 
-if (-not (Test-Path $TimelineJson)) {
-    throw "Production timeline missing: $TimelineJson (required, $($TimelineEvents) events)"
+if (-not $EventPin) {
+    throw 'Event PIN required: set EVENT_PIN environment variable or pass -EventPin'
 }
 
 if (-not $SkipRehearsal) {
@@ -30,10 +28,10 @@ if (-not $SkipRehearsal) {
     }
 }
 
-Write-Host "Protecting production timeline ($($TimelineEvents) events)..."
+Write-Host "Ensuring protected production timeline ($($TimelineEvents) events)..."
 Push-Location $BackendDir
-python scripts/protect_timeline.py --events $TimelineEvents
-if ($LASTEXITCODE -ne 0) { throw "protect_timeline.py failed" }
+python scripts/ensure_production_timeline_pkg.py --events $TimelineEvents
+if ($LASTEXITCODE -ne 0) { throw "ensure_production_timeline_pkg.py failed" }
 Pop-Location
 
 Write-Host "Building participant frontend..."

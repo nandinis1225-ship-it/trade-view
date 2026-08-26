@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -73,7 +74,7 @@ NEXT_PUBLIC_API_PREFIX=/api/v1
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate participant event .env")
-    parser.add_argument("--event-pin", default="0000")
+    parser.add_argument("--event-pin", default=os.environ.get("EVENT_PIN", "0000"))
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--projector", action="store_true", help="Write projector .env (no PIN)")
     args = parser.parse_args()

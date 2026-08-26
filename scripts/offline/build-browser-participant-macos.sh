@@ -7,22 +7,16 @@ OUT_DIR="$ROOT/participant-build/macos/TRADEVERSE"
 FRONTEND_DIR="$ROOT/frontend"
 BACKEND_DIR="$ROOT/backend"
 LAUNCHERS_DIR="$ROOT/scripts/offline/launchers"
-TIMELINE_JSON="$BACKEND_DIR/app/seed/tradeverse_timeline.json"
-EVENT_PIN="${1:-}"
+EVENT_PIN="${EVENT_PIN:-${1:-}}"
 TIMELINE_EVENTS="${TIMELINE_EVENTS:-64}"
 
 if [[ -z "$EVENT_PIN" ]]; then
-  echo "Usage: $0 <EVENT_PIN>" >&2
+  echo "Event PIN required: set EVENT_PIN environment variable or pass as first argument." >&2
   exit 1
 fi
 
-if [[ ! -f "$TIMELINE_JSON" ]]; then
-  echo "Production timeline missing: $TIMELINE_JSON" >&2
-  exit 1
-fi
-
-echo "Protecting production timeline ($TIMELINE_EVENTS events)..."
-(cd "$BACKEND_DIR" && python3 scripts/protect_timeline.py --events "$TIMELINE_EVENTS")
+echo "Ensuring protected production timeline ($TIMELINE_EVENTS events)..."
+(cd "$BACKEND_DIR" && python3 scripts/ensure_production_timeline_pkg.py --events "$TIMELINE_EVENTS")
 
 echo "Building participant frontend..."
 (cd "$FRONTEND_DIR" && npm install && npm run build:participant)

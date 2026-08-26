@@ -26,8 +26,18 @@ Simple instructions for running TRADEVERSE on participant laptops using a **brow
 
 ```powershell
 cd <repo-root>
+$env:EVENT_PIN = "<EVENT_PIN>"
+$env:TIMELINE_DECRYPT_KEY = "<TIMELINE_DECRYPT_KEY>"   # organizer .env — build-time only
+.\scripts\offline\Build-Browser-Participant.ps1
+```
+
+Or pass the PIN explicitly (overrides `EVENT_PIN`):
+
+```powershell
 .\scripts\offline\Build-Browser-Participant.ps1 -EventPin "<EVENT_PIN>"
 ```
+
+The build uses the committed `backend/app/seed/tradeverse_timeline.enc` (64 events). It creates a protected `tradeverse_timeline.pkg` at build time and embeds it in the backend binary. You do **not** need `tradeverse_timeline.json` from another project.
 
 Output: `participant-build\windows\TRADEVERSE\`
 
@@ -35,12 +45,12 @@ Output: `participant-build\windows\TRADEVERSE\`
 
 ```bash
 cd <repo-root>
-./scripts/offline/build-browser-participant-macos.sh "<EVENT_PIN>"
+export EVENT_PIN="<EVENT_PIN>"
+export TIMELINE_DECRYPT_KEY="<TIMELINE_DECRYPT_KEY>"   # organizer .env — build-time only
+./scripts/offline/build-browser-participant-macos.sh
 ```
 
 Output: `participant-build/macos/TRADEVERSE/`
-
-You need `backend/app/seed/tradeverse_timeline.json` with **64 events** on the build machine.
 
 ### 2. Copy the package to each laptop
 
